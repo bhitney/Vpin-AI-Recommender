@@ -23,10 +23,10 @@ PAYLOAD_MAX_AGE_MINUTES = 1
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
 #r"C:\vPinball\PinUPSystem\PUPDatabase.db"
-TARGET_EMU_IDS = (4, 6, 10) 
+TARGET_EMU_IDS = (1, 2, 3, 4, 5)
 
 # Playlist ID to update with AI recommendations
-RECS_PLAYLIST_ID = 1234051
+RECS_PLAYLIST_ID = 1234
 
 # Number of tables to recommend
 NUM_RECOMMENDATIONS = 15

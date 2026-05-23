@@ -112,14 +112,22 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 | Variable | Description |
 |----------|-------------|
 | `DB_PATH` | Path to your `PUPDatabase.db` |
-| `TARGET_EMU_IDS` | Emulator IDs to include |
-| `RECS_PLAYLIST_ID` | Playlist ID to populate with recommendations |
+| `TARGET_EMU_IDS` | Emulator IDs to include (see below) |
+| `RECS_PLAYLIST_ID` | Playlist ID to populate with recommendations (see below) |
 | `NUM_RECOMMENDATIONS` | Number of general (non-EM) recommendations |
 | `NUM_RECOMMENDATIONS_EM` | Number of EM recommendations |
 | `MIN_GAME_RATING` | Minimum rating filter (0 = no filter) |
 | `INCLUDE_NON_RATED` | Set to `1` to include unrated tables even when filtering by rating |
 | `HISTORY_DAYS` | Days of play history to analyze |
 | `CATALOG_MODE` | `LOCAL` for installed tables, `VPS` for online discovery |
+
+### Playlist setup
+
+You must have a playlist configured in PinUp Popper to receive the AI recommendations. You can use an existing playlist or create a new one (the games in the playlist are overwritten each refresh). To find the playlist ID, open the **PinUp Popper Setup Utility**, navigate to your playlists, and note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in the script to that value.
+
+### Emulator IDs
+
+Set `TARGET_EMU_IDS` to the emulator IDs you want the recommender to analyze. You can find these in the PinUp Popper Setup Utility under the emulator configuration. Note that some emulators, like **PinballFX**, may not have standard filenames and would require additional work to integrate properly.
 
 ## Usage
 
