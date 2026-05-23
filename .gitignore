@@ -1,0 +1,9 @@
+.venv/
+.env
+.vs/
+ai_prompt_payload_compact.txt
+ai_prompt_payload.json
+ai_recommendations.json
+ai_recommendations old.json
+PUPDatabase.db
+__pycache__/
