@@ -119,7 +119,8 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 | `MIN_GAME_RATING` | Minimum rating filter (0 = no filter) |
 | `INCLUDE_NON_RATED` | Set to `1` to include unrated tables even when filtering by rating |
 | `HISTORY_DAYS` | Days of play history to analyze |
-| `CATALOG_MODE` | `LOCAL` for installed tables, `VPS` for online discovery |
+| `INCLUDE_NOT_OWNED` | `True` to include external table suggestions, `False` to skip |
+| `NUM_NOT_OWNED` | Number of external table suggestions from the VPIN Spreadsheet |
 
 ### Playlist setup
 
