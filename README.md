@@ -8,6 +8,11 @@ An AI-powered virtual pinball table recommendation engine for PinUp Popper cabin
 - Returns two distinct recommendation sets tailored to each category
 - Weights recommendations toward recently updated tables and known high-quality creators (VPW, SuperTilted, VPX Wizards, Pincredibles, EMUnderdogs)
 - Automatically updates a PinUp Popper playlist with results
+- Optionally tags recommended games with `AI_Suggested` for dynamic playlist creation
+
+## Warning
+
+This is a prototype and requires manual setup and knowledge of Python and SQL. It is not an official product and is provided "as-is" without warranty. Use at your own risk, and always back up your `PUPDatabase.db` before making any changes.
 
 ## Prerequisites
 
