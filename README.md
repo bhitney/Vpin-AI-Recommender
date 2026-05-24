@@ -112,19 +112,27 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 | Variable | Description |
 |----------|-------------|
 | `DB_PATH` | Path to your `PUPDatabase.db` |
-| `TARGET_EMU_IDS` | Emulator IDs to include (see below) |
-| `RECS_PLAYLIST_ID` | Playlist ID to populate with recommendations (see below) |
+| `TARGET_EMU_IDS` | Comma-separated emulator IDs to include (see below) |
+| `UPDATE_PLAYLIST` | `True` to update a PinUp Popper playlist with recommendations |
+| `RECS_PLAYLIST_ID` | Playlist ID to populate (only used when `UPDATE_PLAYLIST` is `True`) |
+| `ADD_SUGGESTED_TAGS` | `True` to tag recommended games with `AI_Suggested` |
 | `NUM_RECOMMENDATIONS` | Number of general (non-EM) recommendations |
 | `NUM_RECOMMENDATIONS_EM` | Number of EM recommendations |
 | `MIN_GAME_RATING` | Minimum rating filter (0 = no filter) |
 | `INCLUDE_NON_RATED` | Set to `1` to include unrated tables even when filtering by rating |
 | `HISTORY_DAYS` | Days of play history to analyze |
-| `INCLUDE_NOT_OWNED` | `True` to include external table suggestions, `False` to skip |
-| `NUM_NOT_OWNED` | Number of external table suggestions from the VPIN Spreadsheet |
+| `INCLUDE_NOT_OWNED` | `True` to include external table suggestions from the VPIN Spreadsheet |
+| `NUM_NOT_OWNED` | Number of external table suggestions (only used when `INCLUDE_NOT_OWNED` is `True`) |
 
 ### Playlist setup
 
-You must have a playlist configured in PinUp Popper to receive the AI recommendations. You can use an existing playlist or create a new one (the games in the playlist are overwritten each refresh). To find the playlist ID, open the **PinUp Popper Setup Utility**, navigate to your playlists, and note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in the script to that value.
+A dedicated playlist is only required if `UPDATE_PLAYLIST` is set to `True`. In that case, you can use an existing playlist or create a new one (the games in the playlist are overwritten each refresh). To find the playlist ID, open the **PinUp Popper Setup Utility**, navigate to your playlists, and note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in the script to that value.
+
+Alternatively, if `ADD_SUGGESTED_TAGS` is `True`, recommended games are tagged with `AI_Suggested` and you can build a dynamic playlist using a SQL query of your choice, for example:
+
+```sql
+SELECT * FROM Games WHERE TAGS LIKE '%AI_Suggested%'
+```
 
 ### Emulator IDs
 
@@ -160,7 +168,8 @@ The script will:
 1. Extract play history and candidate pool from your database
 2. Send the data to Google Gemini for AI-powered recommendations
 3. Save results to `ai_recommendations.json`
-4. Update the specified PinUp Popper playlist
+4. Update the specified PinUp Popper playlist (if `UPDATE_PLAYLIST` is `True`)
+5. Tag recommended games with `AI_Suggested` (if `ADD_SUGGESTED_TAGS` is `True`)
 
 ## Files
 
