@@ -19,32 +19,32 @@ An AI-powered virtual pinball table recommendation engine for PinUp Popper cabin
 
 ### 1. Clone the repository
 
-```bash
+```cmd
 git clone <repo-url>
 cd Vpin_Recommender
 ```
 
 ### 2. Create a virtual environment
 
-```bash
+```cmd
 python -m venv .venv
 ```
 
 ### 3. Activate the virtual environment
 
-**Windows (PowerShell):**
+**PowerShell:**
 ```powershell
 .venv\Scripts\activate
 ```
 
-**Windows (CMD):**
+**CMD:**
 ```cmd
 .venv\Scripts\activate.bat
 ```
 
 ### 4. Install dependencies
 
-```bash
+```cmd
 pip install -r requirements.txt
 ```
 

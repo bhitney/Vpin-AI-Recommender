@@ -22,7 +22,6 @@ PAYLOAD_MAX_AGE_MINUTES = 1
 
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
-#r"C:\vPinball\PinUPSystem\PUPDatabase.db"
 TARGET_EMU_IDS = (1, 2, 3, 4, 5)
 
 # Playlist ID to update with AI recommendations
@@ -309,6 +308,70 @@ def update_playlist(recommendations):
         conn.close()
 
 # ==============================================================================
+# GAME TAG UPDATE STEP (alternate approach)
+# ==============================================================================
+def update_game_tags(recommendations):
+    all_recs = recommendations.get("general", []) + recommendations.get("em", [])
+    sorted_recs = sorted(all_recs, key=lambda r: (-r.get("confidence", 0), r.get("game", "")))
+
+    game_ids = []
+    for rec in sorted_recs:
+        game_id = rec.get("id") or rec.get("GameId")
+        if game_id:
+            game_ids.append(int(game_id))
+
+    if not game_ids:
+        print("[-] No GameIds found in recommendations. Skipping game tag update.")
+        return
+
+    print(f"[+] Updating AI_Suggested tags for {len(game_ids)} recommendations...")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Remove all existing AI_Suggested tags
+        cursor.execute("""
+            UPDATE Games
+            SET TAGS = TRIM(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(
+                            ',' || TAGS || ',', 
+                            ',AI_Suggested,', 
+                            ','
+                        ), 
+                        ', AI_Suggested,', 
+                        ','
+                    ),
+                    ',AI_Suggested ,', 
+                    ','
+                ), 
+                ','
+            )
+            WHERE TAGS LIKE '%AI_Suggested%'
+        """)
+        print(f"[+] Cleared existing AI_Suggested tags.")
+
+        # Add AI_Suggested tag to recommended games
+        placeholders = ','.join(str(gid) for gid in game_ids)
+        cursor.execute(f"""
+            UPDATE Games
+            SET TAGS = CASE 
+                WHEN TAGS IS NULL OR TRIM(TAGS) = '' THEN 'AI_Suggested'
+                ELSE TAGS || ', AI_Suggested'
+            END
+            WHERE GameID IN ({placeholders})
+        """)
+
+        conn.commit()
+        print(f"[+] Tagged {len(game_ids)} games with AI_Suggested.")
+    except Exception as e:
+        print(f"[-] Game tag update failed: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+# ==============================================================================
 # MAIN EXECUTION
 # ==============================================================================
 if __name__ == "__main__":
@@ -327,4 +390,5 @@ if __name__ == "__main__":
         cabinet_payload = extract_data()
         recommendations = fetch_recommendations(cabinet_payload)
         if recommendations:
-            update_playlist(recommendations)
+            # update_playlist(recommendations)
+            update_game_tags(recommendations)
