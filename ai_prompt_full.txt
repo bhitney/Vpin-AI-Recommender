@@ -1,0 +1,1874 @@
+
+    You are an expert Virtual Pinball recommendation engine.
+    Your objective is to analyze a user's play history and select the best matching games from an available "candidate_pool". 
+    The data below uses a compact format:
+    - "top_played_general" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (non-EM history)
+    - "top_played_em" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (EM history)
+    - "id" is the unique GameId from the database
+    - "plays" is the total number of play sessions in the last 365 days
+    - "seconds" is the total time played in seconds in the last 365 days
+    - "last_played" is the number of days since the game was last played
+    - "candidate_pool" rows are: id,game,year,manufacturer,type,rating,updated_days_ago
+    - "id" is the unique GameId from the database
+    - "updated_days_ago" is how many days ago the table file was last updated
+    - "rating" is the user's personal star rating for the table on a 1-5 scale where 5 is the highest (best) and 1 is the lowest (worst). An empty/missing rating value means unknown/unrated and should be treated as neutral (neither favored nor penalized).
+
+    ---
+    [INPUT DATA]
+    ## top_played_general [id,plays,secs,last_played,game,year,mfr,type,rating]
+2282,71,15582,72,Piggy Bank Blitz,2023,,Original,4
+1984,60,14412,41,Game of Thrones LE (VPW),2015,Stern,SS,5
+1234539,45,13291,60,The Matrix (Original 2026),2026,None,None,5
+1234453,35,9185,71,World Cup Soccer (VPW),1994,Bally,SS,5
+604,33,3174,71,White Water,1993,Williams,SS,5
+316,22,3365,57,Tales of the Arabian Nights,1996,Williams,SS,5
+1234463,21,3794,73,Stargate (VPW),1995,Gottlieb,SS,5
+853,21,3398,85,Walking Dead, The (Limited Edition),2014,Stern,SS,5
+538,20,6248,64,Scared Stiff (VPW),1996,Bally,SS,5
+373,20,4000,73,Creature from the Black Lagoon (VPW),1992,Bally,SS,5
+1234521,18,4071,73,Space Station (VPW),1987,Williams,SS,4
+938,18,2181,73,Cactus Canyon Continued (VPW),1998,Bally,SS,4
+1234513,17,1723,41,Cosmic Gunfight (VPW),1982,Williams,SS,4
+1234488,17,4147,87,Medieval Madness (VPW),1997,Williams,SS,5
+1234274,17,2257,73,Bunnyboard,1931,Marble Games Company,,5
+1250,17,1128,84,Star Gazer,1980,Stern,SS,4
+839,16,2017,85,Flash Gordon,1981,Bally,SS,4
+561,16,3136,74,Star Trek The Next Generation (VPW),1993,Williams,SS,5
+1663,15,2569,73,Monster Bash (VPW),1998,Williams,SS,5
+886,15,1850,41,Class of 1812,1991,Gottlieb,SS,3
+377,15,4032,57,Cyclone,1988,Williams,SS,4
+147,15,4250,79,Theatre of Magic,1995,Bally,SS,5
+1991,14,3454,77,Iron Maiden LOTB Premium (VPW),2018,Stern,SS,5
+1234514,13,745,81,Camping Trip (Original 2025),2025,None,Original,
+1234430,13,5404,43,Alien,2017,Heighway,,4
+2549,13,3133,80,Medieval Castle,2012,Original,,
+1983,13,1499,79,AC-DC LUCI - Vault Edition (VPW),2017,Stern,SS,5
+420,13,2155,73,Guns N' Roses (VPW),1994,Data East,SS,5
+1234554,12,1533,49,Hurricane (RBK),1991,Williams,SS,5
+713,12,2705,74,Addams Family,1992,Bally,SS,5
+1234509,11,1957,72,Time Fantasy (VPW),1983,Williams,SS,3
+1234431,11,2201,73,Stranger Things - Stranger Edition,2018,Original,SS,5
+2280,11,3438,64,CyberRace,2023,,Original,5
+2260,11,2644,73,Darkest Dungeon,2023,Original,Original,5
+1959,11,2322,86,IT Pinball Madness,2022,Original,Original,5
+1724,11,1930,81,007 Goldeneye - (VPW),1996,Sega,SS,
+1540,11,3079,73,TRON Legacy (VPW),2011,Stern,SS,5
+737,11,2433,87,Metallica Premium Monsters (VPW),2013,Stern,SS,5
+1234515,10,1068,79,SCREAM,2025,None,Original,
+1234497,10,1469,82,Predator (Skit-B Prototype),2015,Skit-B,None,3
+1234433,10,1985,73,Black Hole (VPW),1981,Gottlieb,SS,5
+1476,10,2614,74,Batman '66,2016,Stern,SS,5
+731,10,1291,72,Pennant Fever,1984,Williams,SS,3
+598,10,3342,73,Twilight Zone (VPW),1993,Bally,SS,5
+1234498,9,3395,81,Playboy (Mod),2002,Stern,SS,3
+1234466,9,4573,84,Hurricane (Balutito Mod),1991,Williams,SS,4
+2553,9,1419,72,Kessel Run,2025,Original,Original,3
+2530,9,1801,65,Dark Chaos,2025,Original,Original,5
+2265,9,2856,79,Die Hard Trilogy (VPW),2023,Original,Original,5
+1715,9,2620,73,Blood Machines (VPW),2022,Original,Original,4
+603,9,1603,63,Whirlwind,1990,Williams,SS,5
+150,9,1642,79,Ghostbusters LE (VPW),2016,Stern,SS,5
+1234499,8,1870,85,Eight Ball (VPW),1977,Bally,SS,4
+1234452,8,1097,185,Ready Player One,2025,,Original,
+1234255,8,727,74,Apollo 13,1995,Sega,SS,5
+2571,8,1578,79,Ripleys Believe It or Not! - JP's Mod,2004,Stern,SS,
+2558,8,1544,84,JAWS 50th Anniversary,2025,Original,Original,4
+2536,8,318,80,Flash - JP's Mod,1979,Williams,SS,
+2504,8,1870,84,Scarface (Videos),2025,Original,,4
+732,8,2487,49,Time Machine,1988,Data East,SS,4
+
+## top_played_em [id,plays,secs,last_played,game,year,mfr,type,rating]
+2552,18,2511,75,Skyscraper,1934,Bally,EM,5
+2526,9,1047,72,Horseshoe,1933,A.B.T Mfg Co,EM,5
+1234481,8,786,85,Cuphead Pro (VPW),2019,Original,EM,4
+2497,8,1222,73,Fleet Jr,1934,Bally,EM,5
+2332,7,142,257,Ace High,1957,Gottlieb,EM,
+1753,7,619,72,Cavalcade,1935,Stoner,EM,3
+596,7,757,82,Triple Strike,1975,Williams,EM,4
+2531,6,1216,74,Baby Leland,1933,Chicago Coin,EM,5
+2492,6,738,72,Silver Cup,1933,Genco,EM,5
+354,6,851,78,Blue Note,1978,Gottlieb,EM,
+2540,5,564,72,Nags,1960,Williams,EM,5
+1883,5,778,111,Team One,1977,Gottlieb,EM,
+1343,5,673,72,Pabst Can Crusher,2016,Stern,EM,3
+547,5,215,236,Slick Chick,1963,Gottlieb,EM,
+363,5,489,76,Capersville,1966,Bally,EM,3
+331,5,512,72,Atlantis,1975,Gottlieb,EM,
+2507,4,618,85,Contact Master,1934,PAMCO,EM,4
+2447,4,246,236,Travel Time,1972,Williams,EM,
+2267,4,94,238,Apollo,1967,Williams,EM,
+2212,4,252,64,Cannes,1976,Segasa,EM,
+2029,4,164,204,Lady Luck,1976,Recel,EM,
+1303,4,246,228,Ship-Mates,1964,Gottlieb,EM,
+1293,4,325,84,Jungle Princess,1977,Gottlieb,EM,4
+1266,4,526,56,Grand Slam,1972,Gottlieb,EM,5
+712,4,213,238,Aztec,1976,Williams,EM,
+624,4,463,85,4 Queens,1970,Bally,EM,4
+553,4,598,72,Spanish Eyes,1972,Williams,EM,3
+364,4,164,252,Captain Fantastic,1976,Bally,EM,
+1234484,3,326,64,Pat Hand,1975,Williams,EM,3
+2572,3,595,84,Space Time,1972,Bally,EM,4
+2532,3,96,251,Clown,1971,Playmatic,EM,
+2520,3,341,76,Solar Ride (EM Underdogs),1979,Gottlieb,EM,3
+2473,3,149,221,Buccaneer,1948,Gottlieb,EM,
+2445,3,168,248,Summer Time,1972,Williams,EM,
+2368,3,183,231,Full House,1966,Williams,EM,
+2363,3,143,236,Star Action,1973,Williams,EM,
+2359,3,190,64,Ben Hur,1977,Staal,EM,
+2336,3,240,257,Coronation,1952,Gottlieb,EM,
+2330,3,136,220,Yukon,1971,Williams,EM,
+2276,3,218,236,Moulin Rouge,1965,Williams,EM,
+2013,3,229,64,Monaco,1977,Segasa,EM,
+1938,3,211,219,Grande Domino,1968,Gottlieb,EM,
+1896,3,405,74,Sea Ray,1971,Bally,EM,3
+1755,3,154,220,Argosy,1977,Williams,EM,
+1700,3,136,230,Dealer's Choice,1974,Williams,EM,
+1630,3,118,194,Bank Shot,1976,Gottlieb,EM,
+1611,3,211,223,Swing-Along,1963,Gottlieb,EM,
+1407,3,94,235,Mustang,1977,Gottlieb,EM,
+1280,3,139,111,Hokus Pokus,1976,Bally,EM,
+1112,3,144,237,Freedom,1976,Bally,EM,
+1102,3,144,226,Speed Racer,2017,Original,EM,
+1064,3,113,220,Bon Voyage,1974,Bally,EM,
+1000,3,162,64,Big Star,1972,Williams,EM,
+998,3,593,76,Big Shot,1974,Gottlieb,EM,3
+901,3,210,223,Big Deal,1963,Williams,EM,
+625,3,570,82,8 Ball,1966,Williams,EM,3
+559,3,305,84,Spirit of 76,1975,Gottlieb,EM,4
+440,3,126,227,Jungle,1972,Gottlieb,EM,
+423,3,136,226,High Hand,1973,Gottlieb,EM,
+397,3,183,227,Far Out,1974,Gottlieb,EM,
+
+## candidate_pool [id,game,year,mfr,type,rating,updated_days_ago]
+1724,007 Goldeneye - (VPW),1996,Sega,SS,,99
+626,1-2-3,1973,Automaticos,EM,,118
+1651,2 in 1,1964,Bally,EM,,2190
+322,2001,1971,Gottlieb,EM,,1108
+2555,2001 Space Odyssey,2025,Original,Original,,177
+2554,2001 Space Odyssey (Videos),2025,Original,Original,,177
+6,24,2009,Stern,SS,5,298
+623,250cc,1992,Inder,SS,,252
+622,300,1975,Gottlieb,EM,,928
+1989,301 Bulls Eye,1986,Grand Products,SS,,250
+2220,4 Aces,1970,Williams,EM,,114
+624,4 Queens,1970,Bally,EM,4,107
+1664,4 Roses,1962,Williams,EM,,495
+323,4 Square,1971,Gottlieb,EM,,2190
+625,8 Ball,1966,Williams,EM,3,699
+2263,A Team, The,2023,Original,Original,,439
+678,A-Go-Go,1966,Williams,EM,,2190
+913,Aaron Spelling,1992,Data East,SS,,2190
+1042,ABBA (Videos),2020,Original,SS,,2190
+324,Abra Ca Dabra,1975,Gottlieb,EM,,422
+770,AC-DC (Videos) (VPW),2012,Stern,SS,,246
+1983,AC-DC LUCI - Vault Edition (VPW),2017,Stern,SS,5,246
+679,Accept,2019,Original,SS,,699
+2332,Ace High,1957,Gottlieb,EM,,257
+680,Ace of Speed,2019,Original,SS,,256
+326,Ace Ventura - Pet Detective,2019,Original,Original,,2190
+681,Aces & Kings,1970,Williams,EM,,1248
+1653,Aces High,1965,Bally,EM,,1273
+713,Addams Family,1992,Bally,SS,5,100
+1626,Addams Family (TV Mod) (Videos),1992,Bally,SS,5,100
+902,Addams Family (Videos),1992,Bally,SS,5,246
+2537,Adventure,1979,Sega,SS,,2190
+327,Adventures of Rocky and Bullwinkle and Friends,1993,Data East,SS,,866
+2360,Adventures of Rocky and Bullwinkle and Friends (Videos),1993,Data East,SS,,2190
+1234472,Adventures of Rocky and Bullwinkle and Friends VPW,1993,Data East,SS,,2190
+682,Aerosmith,2019,Original,SS,,1239
+2016,Aerosmith,2017,Stern,SS,,1179
+683,Agents 777,1984,Game Plan,SS,,2190
+684,Air Aces,1975,Bally,EM,2,2190
+685,Airborne,1996,Capcom,SS,,256
+2562,Airborne,1979,J. Esteban,EM,,252
+1257,Airborne Avenger,1977,Atari,SS,,1206
+328,Airport,1969,Gottlieb,EM,,769
+688,Airwolf,2020,Original,SS,,2190
+1861,Akira,2021,Original,Original,,2190
+689,Al Capone,1984,LTD,SS,,2190
+317,Al's Garage Band Goes On a World Tour,1992,Alvin G,SS,,256
+2390,Aladdin,2020,Original,SS,,2190
+690,Aladdin's Castle,1976,Bally,EM,,213
+1919,Alaska,1978,Interflip,SS,,2190
+692,Algar,1980,Williams,SS,,2190
+329,Ali,1980,Stern,SS,,776
+2482,Ali - JP's Mod,1980,Stern,SS,,250
+2227,Alice in Wonderland,1948,Gottlieb,EM,,257
+1234555,Alice In Wonderland,2026,None,None,,2190
+1234564,Alice Through the Looking Glass,2026,Original,SS,,2190
+1234430,Alien,2017,Heighway,,4,337
+2024,Alien Covenant (Videos),2023,Original,Original,,1153
+693,Alien Poker,1980,Williams,SS,,250
+694,Alien Star,1984,Gottlieb,SS,4,264
+1513,Aliens,2021,Original,Original,,256
+1854,Aliens (Videos),2021,Original,Original,,2190
+1688,Aliens - Nostromo Ultimate,2020,Original,Original,,2190
+695,Alive,1978,Brunswick,SS,,2190
+696,Alley Cats,1985,Williams,SS,,878
+2190,Aloha,1961,Gottlieb,EM,,1026
+2412,Amazon,1979,LTD,SS,,2190
+698,Amazon Hunt,1983,Gottlieb,SS,,1303
+717,America 1492,1986,Juegos Populares,SS,,2190
+1484,America's Most Haunted,2014,Spooky Pinball,SS,,205
+2352,American Country,2024,,Original,,827
+2425,American Graffiti,2024,,Original,5,99
+1714,Amigo,1974,Bally,EM,,856
+2560,An American Werewolf,2023,Original,Original,,2190
+1340,Andromeda,1985,Game Plan,SS,,250
+2461,Andromeda Tokyo 2074,2024,Original,Original,,2190
+1369,Animal,2017,Original,SS,,2190
+722,Animal Crossing Pinball,2020,Original,Original,,2190
+1695,Apache,1975,Playmatic,EM,,983
+699,Apache!,1978,Taito,SS,,253
+2267,Apollo,1967,Williams,EM,,257
+1234255,Apollo 13,1995,Sega,SS,5,2190
+1234256,Apollo 13 (Videos),1995,Sega,SS,5,2190
+700,Aqualand,1986,Juegos Populares,SS,,2190
+330,Aquarius,1970,Gottlieb,EM,,2190
+718,Arena,1987,Gottlieb,SS,,1169
+1755,Argosy,1977,Williams,EM,,2190
+701,Aristocrat,1979,Williams,SS,,194
+1994,Arizona,1977,LTD,SS,,2190
+1234504,Arizona (JPSalas),1977,LTD,SS,,2190
+702,Aspen,1979,Brunswick,SS,,252
+708,Asteroid Annie and the Aliens,1980,Gottlieb,SS,,2190
+703,Astro,1971,Gottlieb,EM,,2190
+1690,Astronaut,1969,Chicago Coin Machine,EM,,1533
+2249,Atarians, The,1976,Atari,SS,,2190
+331,Atlantis,1975,Gottlieb,EM,,298
+707,Atlantis,1989,Bally,SS,4,1092
+704,Atleta,1991,Inder,SS,,2190
+1234547,Attack,1980,Playmatic,SS,,2190
+706,Attack and Revenge from Mars,2015,Original,SS,,253
+827,Attack from Mars (Videos),1995,Bally,SS,,253
+1234524,Attack From Mars (VPW),1995,Bally,SS,,170
+1400,Attack from Mars - G5k Mod,1995,Bally,SS,5,489
+709,Attila The Hun,1984,Game Plan,SS,,2190
+789,Austin Powers (Videos) (VPW),2001,Stern,SS,,59
+710,Austin Powers (VPW),2001,Stern,SS,,59
+711,Avatar,2010,Stern,SS,,198
+828,Avatar (Videos),2010,Stern,SS,,198
+2401,Avatar - The Last Airbender,2024,,Original,,670
+2400,Avatar - The Last Airbender (Videos),2024,,Original,,670
+1234457,Avengers Pro (Stern 2012),2012,Stern,SS,,264
+1234458,Avengers Pro (Stern 2012) (Videos),2012,Stern,SS,,264
+712,Aztec,1976,Williams,EM,,2190
+2531,Baby Leland,1933,Chicago Coin,EM,5,398
+340,Back to the Future,1990,Data East,SS,4,516
+1747,Back to the Future (Videos),1990,Data East,SS,,2190
+1949,Back to the Future - Mod (Videos),1990,Data East,SS,,2190
+1746,Back to the Future Trilogy,2022,Original,Original,,1437
+341,Bad Cats (VPW),1989,Williams,SS,,459
+975,Bad Girls,1988,Gottlieb,SS,,613
+1234544,Bad Girls from Space (2026),None,None,None,3,2190
+1055,Balls-A-Poppin,1956,Bally,EM,,925
+817,Bally Game Show, The,1990,Bally,SS,,763
+1056,Bally Hoo,1969,Bally,EM,,462
+1751,Ballyhoo,1932,Bally,EM,4,205
+1057,Band Wagon,1965,Bally,EM,,1267
+1630,Bank Shot,1976,Gottlieb,EM,,856
+1058,Bank-A-Ball,1965,Gottlieb,EM,,866
+1234476,Banzai Run,1988,Williams,SS,4,2190
+1992,Banzai Run (JP's Mod),1988,Williams,SS,,250
+829,Barb Wire,1996,Gottlieb,SS,,85
+1706,Barb Wire (Videos),1996,Gottlieb,SS,,1259
+1059,Barbarella,1972,Automaticos,EM,,1026
+989,Barracora,1981,Williams,SS,4,48
+1060,Baseball,1970,Gottlieb,EM,,776
+974,Basketball,1986,ISDA,SS,,670
+1476,Batman '66,2016,Stern,SS,5,278
+878,Batman '66 Original (Videos),2018,Original,SS,5,2190
+879,Batman (Data East) (Videos),1991,Data East,SS,,141
+1532,Batman (VPW),1991,Data East,SS,5,82
+870,Batman Forever,1995,Sega,SS,,982
+1647,Batman Forever (Videos),1995,Sega,SS,,151
+343,Batman The Dark Knight,2008,Stern,SS,5,729
+880,Batman The Dark Knight (Videos),2008,Stern,SS,5,245
+1061,Batter Up,1970,Gottlieb,EM,,881
+869,Battlestar Galactica,1980,Williams,SS,2,1026
+1234420,Baywatch,1995,Sega,SS,,2190
+868,Baywatch (Videos),1995,Sega,SS,,71
+344,Beach Bums,1986,Original,SS,,256
+1557,Beast Master,2021,Original,Original,,1651
+2546,Beastie Boys,2025,Original,Original,,376
+2121,Beat the Clock (VPW),1985,Bally,SS,,859
+345,Beat Time,1967,Williams,EM,,2190
+1234533,Beatles (Mod),2018,None,SS,3,2190
+1287,Beatles, Yellow Submarine,2020,Original,EM,2,2190
+2350,Beavis and Butt-head Pinballed,2024,,Original,4,90
+2006,Beavis And Butthead,2023,Original,Original,,262
+2277,Beetlejuice,2023,Original,Original,,878
+2359,Ben Hur,1977,Staal,EM,,65
+724,Big Bang Bar (VPW),1996,Capcom,SS,5,756
+1001,Big Ben,1975,Williams,EM,,2190
+347,Big Brave,1974,Gottlieb,EM,,94
+348,Big Buck Hunter Pro,2010,Stern,SS,,254
+1062,Big Casino,1963,Gottlieb,EM,,864
+1519,Big Chief,1965,Williams,EM,,321
+901,Big Deal,1963,Williams,EM,,1581
+1979,Big Deal,1977,Williams,EM,,350
+2413,Big Flush,1983,LTD,SS,,643
+349,Big Game,1980,Stern,SS,,250
+2223,Big Game,1935,Rock-Ola,EM,,973
+350,Big Guns,1987,Williams,SS,,2190
+999,Big Horse,1975,Maresa,EM,,252
+976,Big House,1989,Gottlieb,SS,,865
+1520,Big Indian,1974,Gottlieb,EM,,252
+2493,Big Lebowski,2025,Original,Original,,468
+2494,Big Lebowski (Videos),2025,Original,,,468
+998,Big Shot,1974,Gottlieb,EM,3,844
+1000,Big Star,1972,Williams,EM,,65
+2369,Big Town,1978,Playmatic,SS,,776
+1234569,Big Trouble in Little China (Original 2026),None,None,None,4,2190
+1914,Big Trouble in Little China (Videos),2022,Original,SS,,256
+1627,Big Valley,1970,Bally,EM,,1581
+2433,Biker Mice from Mars (Videos),2024,,Original,,2190
+1569,Black & Red,1975,Inder,EM,,252
+947,Black Belt,1986,Bally,SS,,250
+2467,Black Fever,1980,Playmatic,SS,,509
+1521,Black Gold,1975,Williams,EM,,796
+1234433,Black Hole (VPW),1981,Gottlieb,SS,5,226
+1002,Black Jack,1978,Bally,SS,,2190
+1234477,Black Knight,1980,Williams,SS,3,2190
+352,Black Knight (JP),1980,Williams,SS,,250
+353,Black Knight 2000,1989,Williams,SS,,1317
+1933,Black Knight Sword Of Rage,2019,Stern,SS,,2190
+2533,Black Magic 4,1980,Recel,SS,,250
+2471,Black Pyramid,1984,Bally,SS,,493
+728,Black Pyramid - JP's Mod,1984,Bally,SS,,250
+318,Black Rose (VPW),1992,Bally,SS,,253
+2506,Black Sabbath,2020,Original,SS,,2190
+1063,Black Sheep Squadron,1979,Astro,SS,,2190
+1739,Black Tiger Pinball,1981,Williams,SS,,643
+2563,Black Velvet,1978,Game Plan,SS,,252
+832,Blackout,1980,Williams,SS,,403
+1756,Blackwater 100,1988,Bally,SS,,832
+1004,Blade Runner 2049,2020,Original,SS,,256
+1512,Blaze and The Monster Machines (Videos),2021,Original,Original,,2190
+1234520,Blizzard of Ozz,2025,None,Original,5,162
+1715,Blood Machines (VPW),2022,Original,Original,4,844
+2219,BloodSport,2023,Original,Original,,227
+1634,Blue Chip,1976,Williams,EM,,2190
+354,Blue Note,1978,Gottlieb,EM,,763
+1234576,Blue Ribbon,1965,Bally,None,,44
+825,Blues Brothers, The,2020,Original,SS,,1615
+1544,Bluey,2021,Original,Original,,2190
+1980,BMX,1983,Bally,SS,,250
+2403,BMX - Radical Rick Mod,1983,Bally,SS,,697
+1234474,Bob Cuspe (original 2025),2025,None,None,,2190
+1387,Bobby Orr Power Play,1978,Bally,SS,,842
+1064,Bon Voyage,1974,Bally,EM,,2190
+1950,Bond,2022,Original,Original,,1248
+1957,Bond (Videos),2022,Original,Original,,1248
+2000,Bond 60th LE,2023,Original,Original,,1160
+990,Bone Busters Inc.,1989,Gottlieb,SS,,1304
+1065,Boomerang,1974,Bally,EM,,1407
+786,Bounty Hunter,1985,Gottlieb,SS,,613
+2399,Bourne Identity,2024,,Original,,635
+2426,Bourne Identity (Videos),2024,,Original,,2190
+1234013,Bourne Identity CE (Videos),,,Original,4,2190
+1234009,Bourne Identity Challenge Edition,,,Original,4,2190
+1550,Bow and Arrow,1974,Bally,SS,,1555
+1234532,Boxster Pinball,2010,None,Original,,2190
+1578,Brave,2021,Original,Original,,2190
+1092,Brave Team,1985,Inder,SS,,249
+1757,BraveStarr,2021,Original,Original,,2190
+1551,Breaking Bad,1986,Original,Original,,1635
+1582,Breaking Bad (Videos),1986,Original,Original,,2190
+833,Breakshot (VPW),1996,Capcom,SS,,697
+276,Bride Of Pinbot, The Machine  (VPW),1991,Williams,SS,,1238
+1635,Bristol Hills!,1971,Gottlieb,EM,,530
+1622,Britney Spears,2021,Original,Original,,2190
+356,Bronco,1977,Gottlieb,EM,,981
+357,Bubba the Redneck Werewolf,2017,Original,SS,2,578
+358,Buccaneer,1976,Gottlieb,EM,,643
+2473,Buccaneer,1948,Gottlieb,EM,,2190
+1234542,Buck Rogers (UP),1980,Gottlieb,SS,5,107
+359,Buckaroo,1965,Gottlieb,EM,,870
+1960,Buffy The Vampire Slayer,2022,Original,Original,,2190
+1961,Buffy The Vampire Slayer (Videos),2022,Original,Original,,2190
+360,Bugs Bunny's Birthday Ball,1990,Bally,SS,,255
+1312,Bugs Bunny's Birthday Ball (Videos),1990,Bally,SS,,255
+1003,Bumper,1977,Bill Port,EM,,252
+1066,Bumper Pool,1969,Gottlieb,EM,,1581
+1234274,Bunnyboard,1931,Marble Games Company,,5,269
+1680,Bushido,1993,Inder,SS,,2190
+928,Cabaret,1968,Williams,EM,2,714
+1931,Cactus Canyon (Videos) (VPW),1998,Bally,SS,4,2190
+361,Cactus Canyon (VPW),1998,Bally,SS,4,1343
+938,Cactus Canyon Continued (VPW),1998,Bally,SS,4,254
+926,Cactus Jack's,1991,Gottlieb,SS,,884
+1067,Caddie,1975,Playmatic,EM,,1581
+1234517,Call of Duty,2025,None,Original,,2190
+1234514,Camping Trip (Original 2025),2025,None,Original,,194
+1009,Canada Dry,1976,Gottlieb,EM,,925
+362,Canasta 86,1986,Inder,SS,3,217
+2212,Cannes,1976,Segasa,EM,,65
+1068,Cannon Fodder,2018,Original,SS,,2190
+363,Capersville,1966,Bally,EM,3,1403
+1069,Capt. Card,1974,Gottlieb,EM,,669
+364,Captain Fantastic,1976,Bally,EM,,226
+2496,Captain Spaulding,2025,Original,Original,,340
+1514,Car Hop,1991,Gottlieb,SS,,1308
+1444,Carcariass Pinball,2021,Original,Original,,2190
+1636,Card King,1971,Gottlieb,EM,,2190
+1070,Card Trix,1970,Gottlieb,EM,,2190
+365,Card Whiz,1976,Gottlieb,EM,,2190
+2431,Carnaval no Rio,1977,LTD,SS,,229
+1234531,Carnival Games,2025,None,Original,,99
+1552,Carrie Underwood (Videos),2021,Original,Original,,2190
+366,CARtoons RC,2017,FrankenCade,Original,3,255
+1234501,Casino,1958,Williams,None,,2190
+979,Catacomb,1981,Stern,SS,,99
+1753,Cavalcade,1935,Stoner,EM,3,72
+1758,Cavalier,1979,Recel,SS,,2190
+2244,Cenobite,2023,,Original,,938
+927,Centaur,1981,Bally,SS,5,218
+367,Centigrade 37,1977,Gottlieb,EM,,357
+1749,Central Park,1966,Gottlieb,EM,,321
+2456,Cerberus,1983,Playmatic,SS,,249
+1669,Cerebral Maze, The,2021,Original,Original,,2190
+2383,Champ,1974,Bally,EM,,2190
+297,Champion Pub, The,2017,Original,SS,,629
+980,Champions League 2021,2021,Original,SS,,1275
+987,Champions League 2021 (Videos),2021,Original,SS,,1275
+1071,Chance,1978,Playmatic,SS,,251
+2228,Chance,1971,Playmatic,EM,,251
+2266,Charlie Brown Christmas,2023,,,3,168
+368,Charlie's Angels,1978,Gottlieb,SS,,251
+2434,Check,1975,Petaco,EM,,251
+1072,Check Mate,1977,Taito do Brasil,SS,,253
+2435,Check Mate,1975,Recel,EM,,251
+977,Checkpoint,1991,Data East,SS,,516
+1445,Cheech & Chong - Road-Trip'pin,2021,Original,SS,3,255
+369,Cheetah,1980,Stern,SS,3,643
+2505,Cheetah - JPs Mod,1980,Stern,SS,,249
+1895,Cherry Coke,2020,Original,SS,,2190
+370,Chicago Cubs Triple Play,1985,Gottlieb,SS,,2190
+2188,Children of the Corn,2019,Original,Original,,643
+1607,Christmas Pinball,2021,Original,Original,,1268
+1911,Chrono Trigger,2022,Original,Original,,297
+929,Circus,1980,Brunswick,SS,,249
+1073,Circus,1980,Gottlieb,SS,,910
+1074,Circus,1977,Zaccaria,EM,,116
+1981,Circus,1973,Bally,EM,,143
+295,Cirqus Voltaire (VPW),1997,Bally,SS,5,254
+2564,City Hunter,2025,,Original,,2190
+2432,City Ship,1978,J. Esteban,SS,,606
+978,City Slicker,1987,Bally,SS,,1317
+1041,Clash, The,2018,Original,SS,,2190
+886,Class of 1812,1991,Gottlieb,SS,3,669
+1075,Cleopatra,1977,Gottlieb,SS,,2190
+885,Close Encounters,1978,Gottlieb,SS,,392
+1576,Cloudy With A Chance Of Meatballs,2021,Original,Original,,2190
+2532,Clown,1971,Playmatic,EM,,251
+1603,Clue (Videos),2018,Original,SS,,796
+1234522,Cobra,1987,None,None,,170
+984,Coldplay (Videos),2020,Original,SS,,2190
+1076,College Queens,1969,Gottlieb,EM,,832
+887,Comet,1985,Williams,SS,3,80
+1454,Commando,2020,Original,SS,,1181
+930,Conan,1983,Rowamet,SS,,2190
+1077,Concorde,1975,Emagar,EM,,1581
+1543,Congo (Videos),1995,Williams,SS,,2190
+1272,Congo (VPW),1995,Williams,SS,,239
+1681,Conquest 200,1976,Playmatic,EM,,251
+1078,Contact,1978,Williams,SS,,2190
+2507,Contact Master,1934,PAMCO,EM,4,397
+1079,Contest,1958,Gottlieb,EM,,2190
+2336,Coronation,1952,Gottlieb,EM,,257
+822,Corsario,1989,Inder,SS,,193
+971,Corvette,1994,Bally,SS,5,58
+1080,Cosmic,1980,Taito,SS,,253
+1081,Cosmic Gunfight,1982,Williams,SS,,1181
+1234513,Cosmic Gunfight (VPW),1982,Williams,SS,4,187
+746,Cosmic Princess,1979,Stern,SS,,251
+1637,Cosmic Venus,1978,Tilt Movie,SS,,1434
+2556,Count-Down (VPW),1979,Gottlieb,SS,4,100
+1083,Counterforce,1980,Gottlieb,SS,,460
+1084,Cow Poke,1965,Gottlieb,EM,,1581
+1234479,Cowboy Eight Ball 2,1981,LTD,SS,,2190
+1238,Crash Bandicoot,2021,Original,Original,,2190
+1529,Creature from the Black Lagoon (Videos),1992,Bally,SS,4,2190
+373,Creature from the Black Lagoon (VPW),1992,Bally,SS,5,350
+1632,Creepshow,2022,Original,SS,,396
+374,Crescendo,1970,Gottlieb,EM,,2190
+1085,Criterium 77,1977,Taito,SS,,252
+1086,Cross Town,1966,Gottlieb,EM,,2190
+1863,Crysis,2018,Original,SS,,2190
+2229,Crystal-Ball,1970,Talleres del Llobregat,EM,,251
+375,CSI,2008,Stern,SS,,2190
+1588,Cue,1982,Stern,SS,,2190
+376,Cue Ball Wizard,1992,Gottlieb,SS,,1023
+727,Cuphead Pro,2020,Original,EM,4,2190
+2256,Cuphead Pro (Videos),2020,Original,EM,,255
+1234481,Cuphead Pro (VPW),2019,Original,EM,4,2190
+972,Cybernaut,1985,Bally,SS,,255
+973,Cybernaut (Dark Mode),1985,Bally,SS,,255
+2280,CyberRace,2023,,Original,5,181
+377,Cyclone,1988,Williams,SS,4,64
+1024,Cyclopes,1985,Game Plan,SS,,2190
+2481,Daniel Tiger,2024,Original,Original,,2190
+1624,Dante's Inferno,2022,Original,Original,,1583
+2339,Daredevil,2024,,Original,,427
+2371,Dark (Videos),2024,,Original,3,2190
+2530,Dark Chaos,2025,Original,Original,5,271
+1234567,Dark Chaos (Original 2025) Test,None,None,None,5,2190
+144,Dark Crystal Pinball, The,2020,Original,SS,,2190
+315,Dark Princess,2020,Original,Original,,2190
+2022,Dark Rider,1984,Geiger,SS,,1135
+798,Dark Shadow,1986,Nuova Bell Games,SS,,1479
+2260,Darkest Dungeon,2023,Original,Original,5,88
+799,Darling,1973,Williams,EM,,2190
+378,Deadly Weapon,1990,Gottlieb,SS,3,94
+1442,Deadpool,2018,Stern,SS,,129
+1495,Deadpool (Videos),2018,Stern,SS,,255
+1234519,Deadpool (VPW),2018,None,SS,5,2190
+1700,Dealer's Choice,1974,Williams,EM,,230
+1455,Death Wish 3,2019,Original,SS,,2190
+2440,Deep Purple,2024,Original,,,601
+379,Defender (VPW),1982,Williams,SS,,297
+380,Demolition Man,1994,Williams,SS,4,482
+1234561,Demolition Man (Cryo Mod),1994,Williams,SS,3,2190
+818,Demolition Man (Videos),1994,Williams,SS,,2190
+1864,Depeche Mode Pinball,2021,Original,Original,,2190
+1678,Desert City,1977,Fipermatic,EM,,916
+800,Devil Riders,1984,Zaccaria,SS,,2190
+801,Devil's Dare,1982,Gottlieb,SS,,44
+616,Diablo Pinball,2017,Original,SS,,255
+802,Diamond Jack,1967,Gottlieb,EM,,2190
+803,Diamond Lady,1988,Gottlieb,SS,,249
+2377,Dick Tracy,2024,,Original,,746
+2265,Die Hard Trilogy (VPW),2023,Original,Original,5,2190
+804,Dimension,1971,Gottlieb,EM,,1105
+1856,Diner (VPW),1990,Williams,SS,,909
+805,Dipsy Doodle,1970,Williams,EM,,2190
+1730,Dirty Dancing,2022,Original,Original,,2190
+382,Dirty Harry,1995,Williams,SS,,662
+819,Dirty Harry (Videos),1995,Williams,SS,,1204
+1964,Disco,1977,Stern,EM,,1271
+1999,Disco Dancing,1979,LTD de Brasil,SS,,251
+1614,Disco Fever,1978,Williams,SS,,1601
+1487,Disney Descendants (Videos),2016,Original,SS,,2190
+807,Disney Princesses,2016,Original,SS,,2190
+1470,Dixieland,1968,Bally,EM,,2190
+1708,Django,2022,Original,Original,,2190
+2216,Django (Videos),2022,,Original,,2190
+2123,Doctor Strange,2023,Original,Original,,2190
+1671,Doctor Who (VPW),1992,Bally,SS,,1091
+1754,Dogies,1968,Bally,EM,,2190
+808,Dolly Parton,1979,Bally,SS,,251
+1469,Dolphin,1974,Chicago Coin,EM,,2190
+384,Domino,1968,Gottlieb,EM,,785
+1738,Donald Duck Phantomias,2022,Original,Original,,1220
+1865,Doraemon,2020,Original,SS,,2190
+2213,Double Barrel,1961,Williams,EM,,2190
+809,Double-Up,1970,Bally,EM,2,980
+385,Dr Dude,1990,Bally,SS,,980
+1734,Dr. Jekyll and Mr. Hyde,2022,Original,Original,,2190
+386,Dracula,1979,Stern,SS,3,669
+1571,Dracula- Bram Stoker's (Mod),1993,Williams,SS,3,585
+1556,Dracula- Bram Stoker's (Videos),1993,Williams,SS,,127
+355,Dracula- Bram Stoker's (VPW),1993,Williams,SS,5,127
+810,Dragon,1978,Gottlieb,SS,,713
+1759,Dragon,1977,Interflip,EM,,1036
+2528,Dragon Ball Super Saiyan Edition,2025,Original,Original,,365
+1760,Dragon Ball Z,2019,Original,SS,,1092
+1761,Dragon Fire,2019,Original,Original,,2190
+2025,Dragon's lair (Videos),2023,Original,Original,,2190
+2472,Dragonette,1954,Gottlieb,EM,,2190
+2449,Dragonfist,1981,Stern,SS,,191
+811,Drakor,1979,Taito,SS,,252
+1579,Dream Daddy,2020,Original,Original,,1340
+1625,Drink Absolut,2015,Original,EM,,1583
+812,Drop-A-Card,1971,Gottlieb,EM,,1545
+1866,Drunken Santa,2020,Original,SS,,2190
+1354,Ducktales,2020,Original,SS,,910
+1860,Duke Nukem 3D,2020,Original,SS,,2190
+1942,Dukes Of Hazzard (Videos),2022,Original,Original,,795
+2370,Dune,2024,,Original,3,727
+2391,Dune (Videos),2024,,Original,3,727
+813,Dungeons & Dragons,1987,Bally,SS,3,297
+1915,Dungeons & Dragons (Videos),1987,Bally,SS,,216
+814,Duotron,1974,Gottlieb,EM,,2190
+1355,Eager Beaver,1965,Williams,EM,,1652
+871,Earth Wind Fire,1981,Zaccaria,SS,3,669
+834,Earthshaker (VPW),1989,Williams,SS,5,745
+1087,Eclipse,1982,Gottlieb,SS,,608
+1412,Egg Head,1961,Gottlieb,EM,,909
+1234568,Egg Head (EMU),1961,Gottlieb,EM,4,2190
+1234499,Eight Ball (VPW),1977,Bally,SS,4,203
+855,Eight Ball Champ,1985,Bally,SS,,832
+856,Eight Ball Deluxe,1981,Bally,SS,,768
+389,El Bueno, el Feo y el Malo,2015,Original,SS,,259
+390,El Dorado,1975,Gottlieb,EM,,909
+1006,El Dorado City of Gold,1984,Gottlieb,SS,,1491
+2525,Electric State,2025,Original,,,2190
+835,Elektra,1981,Bally,SS,,1092
+1457,Elite Guard,1968,Gottlieb,EM,,2190
+391,Elvira and the Party Monsters,1989,Bally,SS,,697
+1234005,Elvira and the Party Monsters (Re-vamped),1989,Bally,SS,4,2190
+1234006,Elvira and the Party Monsters (Re-vamped) (Videos),1989,Bally,SS,4,2190
+1234489,Elvira's House of Horrors,2025,None,None,,226
+1234490,Elvira's House of Horrors (Videos),2025,None,None,,2190
+278,Elvis,2004,Stern,SS,,253
+392,Elvis (Gold Mod),2004,Stern,SS,,1144
+771,Elvis (Videos),2004,Stern,SS,,253
+1628,Elvis - King of Rock & Roll,2004,Stern,SS,,240
+981,Embryon,1981,Bally,SS,,909
+1643,Encanto,2022,Original,Original,,2190
+1701,Endless Summer,2020,Original,Original,,2190
+1533,Escape from Monkey Island,2021,Original,Original,,255
+1396,Escape from New York,1984,Original,SS,,2190
+840,Escape from the Lost World,1988,Bally,SS,,1105
+1234560,Escape from the Lost World VPW,1988,None,None,,2190
+393,Evel Knievel,1977,Bally,SS,,297
+1645,Evil Dead 2 (Videos),2019,Original,SS,3,1575
+2460,Evil Fight,1980,Playmatic,SS,,463
+1008,Excalibur,1988,Gottlieb,SS,,582
+1930,Excalibur (Videos),1988,Gottlieb,SS,,2190
+2362,Exorcist, The,2023,,Original,,2190
+841,F-14 Tomcat (Videos),1987,Williams,SS,,2190
+394,F-14 Tomcat (VPW),1987,Williams,SS,,493
+1679,Faces,1976,Sonic,EM,,2190
+395,Faeton,1985,Juegos Populares,SS,,249
+2191,Fair Fight,1978,Recel,SS,,235
+2393,Fallout - Vault Edition (Videos),2024,,Original,4,608
+396,Family Guy,2007,Stern,SS,,1601
+1366,Family Guy (Videos),2007,Stern,SS,,2190
+2441,Fan-Tas-Tic,1972,Williams,EM,,259
+1234468,Fantastic Four,2024,None,None,,254
+397,Far Out,1974,Gottlieb,EM,,884
+1103,Farfalla,1983,Zaccaria,SS,,1248
+1323,Fashion Show,1962,Gottlieb,EM,1,2190
+1104,Fast Draw,1975,Gottlieb,EM,,884
+904,Fathom,1981,Bally,SS,5,606
+1548,Fifteen,1974,Inder,EM,,251
+1920,Fifth Element, The (Videos),2022,Original,Original,,1328
+1673,Fight Night,2014,Original,Original,,2190
+1105,Fire Action,1980,Taito,SS,,206
+1936,Fire Action De Luxe,1983,Taito,SS,,206
+1106,Fire Queen,1977,Gottlieb,EM,,785
+873,Fire!,1987,Williams,SS,3,86
+1007,Fireball,1972,Bally,EM,,736
+874,Fireball II,1981,Bally,SS,,1556
+2343,Fireball XL5,2024,,Original,4,244
+399,Firecracker,1971,Bally,EM,4,884
+400,Firepower,1980,Williams,SS,,1220
+401,Firepower II,1983,Williams,SS,,2190
+617,Firepower vs. A.I.,1980,Williams,SS,,226
+402,Fish Tales (VPW),1992,Williams,SS,5,664
+1558,Five Nights at Freddy's,2021,Original,Original,,832
+1107,FJ,1978,Hankin,SS,,2190
+405,Flash,1979,Williams,SS,5,492
+2536,Flash - JP's Mod,1979,Williams,SS,,251
+2414,Flash Dragon,1986,Playmatic,SS,,669
+839,Flash Gordon,1981,Bally,SS,4,143
+1857,Flash Gordon (Videos),1981,Bally,SS,,143
+406,Flash, The,2018,Original,SS,,492
+1672,Flashman,1984,Sportmatic,SS,,249
+2497,Fleet Jr,1934,Bally,EM,5,377
+2474,Fleetwood Mac,2025,Original,,,255
+1375,Flicker,1974,Bally,EM,,1386
+407,Flight 2000,1980,Stern,SS,3,1308
+579,Flintstones,1994,Williams,SS,4,190
+1273,Flintstones Cartoon Ed. (Videos),1994,Williams,SS,,190
+1234506,Flintstones Cartoon Edition,1994,Williams,SS,4,2190
+408,Flip a Card,1970,Gottlieb,EM,,884
+2001,Flip Flop,1976,Bally,EM,,251
+1925,Flipper Fair,1961,Gottlieb,EM,,884
+1108,Flipper Football,1996,Capcom,SS,,2190
+2294,Flipper Pool,1965,Gottlieb,EM,,2190
+1109,Flying Carpet,1972,Gottlieb,EM,,2190
+1522,Flying Chariots,1963,Gottlieb,EM,,869
+1349,Flying Turns,1964,Midway,EM,,255
+1243,Fog, The,2020,Original,EM,,1586
+1255,Foo Fighters,2020,Original,SS,,2190
+1234535,Foo Fighters (Stern 2023),None,None,None,,2190
+1937,Football,1979,Taito,SS,,252
+2011,Force,1979,LTD,SS,,2190
+1110,Force II,1981,Gottlieb,SS,,1275
+2311,Forrest Gump (Videos),2023,Original,Original,,2190
+2415,Fortnite,2024,,Original,,2190
+1111,Four Million B.C.,1971,Bally,EM,,1400
+1696,Four Seasons,1968,Gottlieb,EM,,884
+1018,Frank Thomas' Big Hurt,1995,Gottlieb,SS,,559
+775,Frankenstein, Mary Shelley's,1995,Sega,SS,,107
+776,Frankenstein, Mary Shelley's (Videos),1995,Sega,SS,,107
+850,Freddy A Nightmare on Elm Street,1994,Gottlieb,SS,,884
+2499,Freddys Nightmares (Videos),2025,Original,Original,,255
+1112,Freedom,1976,Bally,EM,,713
+410,Freefall,1981,Stern,SS,,44
+1602,Friday the 13th,2021,Original,Original,,255
+1618,Friday the 13th (Videos),2021,Original,Original,,255
+1113,Frontier,1980,Bally,SS,3,297
+2368,Full House,1966,Williams,EM,,766
+1703,Full Metal Jacket,2022,Original,Original,,1409
+2125,Full Throttle,2023,Original,Original,,2190
+1410,Fun Fair,1968,Gottlieb,EM,,2190
+2004,Fun Land,1968,Gottlieb,EM,,884
+1411,Fun-Fest,1973,Williams,EM,,2190
+288,Funhouse,1990,Williams,SS,,1385
+2316,Futurama,2024,,Original,4,629
+1030,Future Spa,1979,Bally,SS,,251
+2177,Galaxia,1975,LTD,SS,,251
+1935,Galaxie,1971,Gottlieb,EM,,2190
+412,Galaxy,1980,Stern,SS,,1105
+2017,Galaxy,1973,Sega,EM,,251
+1264,Galaxy Play,1986,CIC Play,SS,,2190
+1613,Gamatron,1985,Pinstar,SS,,249
+1535,Game of Thrones (Videos),2021,Original,Original,,50
+1984,Game of Thrones LE (VPW),2015,Stern,SS,5,133
+1884,Games, The,1984,Gottlieb,SS,,810
+413,Gargamel Park,2017,Original,SS,,51
+1654,Gaucho,1963,Gottlieb,EM,3,1462
+1393,Gay 90's,1970,Williams,EM,,883
+1268,Gemini,1978,Gottlieb,EM,,2190
+1263,Gemini 2000,1982,Taito,SS,,252
+414,Genesis,1986,Gottlieb,SS,,768
+1234548,Genesis (VPW),1986,Gottlieb,SS,,72
+893,Genie,1979,Gottlieb,SS,3,746
+1629,Get Smart (Videos),2021,Original,Original,,2190
+580,Getaway: High Speed II, The,1992,Williams,SS,,1289
+1501,Getaway: High Speed II, The (Videos),1992,Williams,SS,,1289
+982,Ghostbusters LE (Videos) (VPW),2016,Stern,SS,,1519
+150,Ghostbusters LE (VPW),2016,Stern,SS,5,846
+912,Ghostbusters Slimer,2017,Original,SS,,181
+1288,GI Joe,2017,Original,SS,,226
+1855,GI Joe (Videos),2017,Original,SS,,226
+1289,Gigi,1963,Gottlieb,EM,,530
+415,Gilligan's Island,1991,Bally,SS,3,883
+1589,Gilligan's Island (Videos),1991,Bally,SS,,2190
+1010,Gladiators,1993,Gottlieb,SS,,255
+1234534,Gnarly Bot (Original 2025),2025,None,None,,2190
+2367,Godfather,2024,,Original,,365
+983,Godzilla (VPW),1998,Sega,SS,4,365
+2567,Godzilla LE 70th,2025,Original,Original,2,2190
+2566,Godzilla LE 70th (Videos),2025,Original,Original,3,2190
+1593,Godzilla Remix LE,2021,Sega,SS,3,255
+2126,Godzilla vs Kong,2023,Original,Original,,1089
+890,Goin' Nuts,1983,Gottlieb,SS,,1275
+1262,Gold Ball,1983,Bally,SS,,514
+1246,Gold Rush,1971,Williams,EM,,826
+2475,Gold Star,1954,Gottlieb,EM,,2190
+1859,Gold Strike,1975,Gottlieb,EM,,2190
+1261,Gold Wings,1986,Gottlieb,SS,,2190
+416,Golden Arrow,1977,Gottlieb,EM,,883
+1934,Golden Cue,1998,Sega,SS,,1296
+872,Goldorak,2017,Original,SS,,2190
+1020,GoldWing,2018,Original,EM,,2190
+865,Goonies, The -  (Videos) (VPW),2019,Original,SS,,116
+1562,Goonies, The -  Never Say Die (VPW),2021,Original,Original,4,116
+417,Gorgar,1979,Williams,SS,,664
+2453,GORILLAZ,2024,,Original,,99
+1247,Gork,1983,Taito,SS,,252
+1234511,Gradius (Original 2017),2017,Original,SS,,2190
+892,Grand Lizard,1986,Williams,SS,,440
+418,Grand Prix,1976,Williams,EM,,1423
+1039,Grand Prix,2005,Stern,SS,,253
+2416,Grand Prix,1977,LTD,SS,,2190
+1265,Grand Slam,1983,Bally,SS,,2190
+1266,Grand Slam,1972,Gottlieb,EM,5,58
+1382,Grand Tour,1964,Bally,EM,,1399
+1938,Grande Domino,1968,Gottlieb,EM,,2190
+1040,Grateful Dead,2013,Original,SS,,2190
+1621,Grease  B & W,2004,Stern,SS,,2190
+960,Grease (Videos),2020,Original,SS,,49
+1982,Great Houdini,2022,Original,Original,,1230
+2529,Green Day,2025,Original,Original,,2190
+1234541,Green Pastures (Gottlieb 1954),1954,Gottlieb,EM,,2190
+1752,Gremlins,2022,Original,Original,,1412
+1290,Gridiron,1977,Gottlieb,EM,,637
+1559,Gridiron - NFL Tribute,1977,Gottlieb,EM,,637
+1234536,Grinch's How to Steal Christmas,2025,None,None,,151
+1988,Grinch, The,2022,Original,Original,3,2190
+419,Groovy,1970,Gottlieb,EM,,2190
+1477,Guardians of the Galaxy (VPW),2017,Stern,SS,5,200
+2231,Guardians of the Galaxy Trilogy,2023,Original,Original,,2190
+1659,Gulfstream,1973,Williams,EM,,1386
+2548,Gun Men,1979,Staal,SS,,340
+1417,Guns N' Roses (Videos),1994,Data East,SS,,2190
+420,Guns N' Roses (VPW),1994,Data East,SS,5,756
+1234525,Hairy-Singers,1966,Rally,EM,,2190
+1869,Half-Life,2019,Original,SS,2,2190
+2476,Hall and Oates,2025,Original,,,255
+2498,Halley Comet,1986,Juegos Populares,SS,,2190
+1954,Halloween 1978-1981,2022,Original,Original,4,1289
+2279,Halloween Michael Myers edition (Videos),2023,,Original,,2190
+2398,Halo,2021,,Original,,713
+1284,Hang Glider (VPW),1976,Bally,EM,,637
+1955,Hannibal Lecter,None,Original,Original,,2190
+1019,Hardbody,1987,Bally,SS,,1120
+847,Harlem Globetrotters (VPW),1979,Bally,SS,,663
+2542,Harlem Globetrotters - JP's Mod,1979,Bally,SS,,251
+1052,Harley Quinn,2017,Original,SS,3,1315
+421,Harley-Davidson,1991,Bally,SS,,251
+1025,Harley-Davidson,1999,Sega,SS,,1026
+1408,Harmony,1967,Gottlieb,EM,,2190
+1475,Harry Potter and the Goblet of Fire,2020,OrbitalPin,SS,5,231
+422,Haunted House (VPW),1982,Gottlieb,SS,,883
+1253,Hawkman,1983,Taito,SS,,252
+1541,Hayburners,1951,Williams,EM,,2190
+1283,Hearts And Spades,1969,Gottlieb,EM,,2190
+1549,Hearts Gain,1971,Inder,EM,,251
+2522,Heat Ray Heist,2025,Original,Original,,2190
+1031,Heat Wave,1964,Williams,EM,,575
+931,Heavy Metal,1981,Rowamet,SS,,229
+1050,Heavy Metal Meltdown,1987,Bally,SS,,883
+2427,Hellboy,2024,Original,,,99
+1947,Hellraiser (Videos),2022,Original,Original,,883
+985,Hercules,1979,Atari,SS,,255
+1686,Hi-Deal,1975,Bally,EM,,1064
+1358,Hi-Diver,1959,Gottlieb,EM,,257
+2300,Hi-Lo Ace,1973,Bally,EM,,2190
+2271,Hi-Score,1967,Gottlieb,EM,,257
+1322,Hi-Score Pool,1971,Chicago Coin,EM,,2190
+423,High Hand,1973,Gottlieb,EM,,1075
+891,High Roller Casino,2001,Stern,SS,,1423
+1279,High Seas,1976,Gottlieb,EM,,2190
+424,High Speed,1986,Williams,SS,,79
+1868,Highlander,2020,Original,SS,,1410
+2417,Hip Hop,2024,,Original,,2190
+1032,Hit The Deck,1978,Gottlieb,EM,,2190
+1280,Hokus Pokus,1976,Bally,EM,,111
+988,Hollywood Heat,1986,Gottlieb,SS,,579
+1600,Home Alone (Videos),2021,Original,Original,,2190
+1963,Honey,1972,Williams,EM,,65
+2501,Hong Kong Phooey,2025,Original,Original,,458
+894,Hook (Videos) (VPW),1992,Data East,SS,,1116
+425,Hook (VPW),1992,Data East,SS,,1116
+1053,Hoops,1991,Gottlieb,SS,,883
+2218,Horrorburg,2023,,Original,,259
+2526,Horseshoe,1933,A.B.T Mfg Co,EM,5,397
+1939,Hot Ball,1979,Taito,SS,,252
+1281,Hot Hand,1979,Stern,SS,,1569
+2376,Hot Line,1966,Williams,EM,,756
+426,Hot Shot,1973,Gottlieb,EM,,384
+895,Hot Shots,1989,Gottlieb,SS,,2190
+1282,Hot Tip,1977,Williams,SS,,2190
+1402,HotDoggin',1979,Bally,SS,,2190
+1560,Hotel Transylvania,2021,Original,Original,,2190
+1561,Hotel Transylvania (Videos),2021,Original,Original,,2190
+968,House of Diamonds,1978,Zaccaria,SS,,1307
+2178,Howzat!, Dennis Lillee's,1980,Hankin,SS,,249
+1391,Humpty Dumpty,1947,Gottlieb,EM,,2190
+1239,Hunter,1935,Jennings,EM,,197
+1234466,Hurricane (Balutito Mod),1991,Williams,SS,4,2190
+1234554,Hurricane (RBK),1991,Williams,SS,5,64
+1648,Hustler,1980,LTD,SS,,249
+1903,Hyperball,1981,Williams,SS,,2190
+1397,I Dream of Jeannie Pinball,2019,Original,SS,,2190
+2459,Ice Age Christmas,2020,Original,Original,,509
+896,Ice Cold Beer,1983,Taito,SS,3,350
+1254,Ice Fever,1985,Gottlieb,SS,,2190
+842,Incredible Hulk,1979,Gottlieb,SS,,255
+2132,Incredible Hulk (Videos),1979,Gottlieb,SS,,255
+820,Independence Day,1996,Sega,SS,,79
+1381,Independence Day (Videos),1996,Sega,SS,,79
+910,Indiana Jones,2008,Stern,SS,,253
+1704,Indiana Jones (Videos),2008,Stern,SS,,253
+2204,Indiana Jones - The Last Movie,2023,Original,Original,,1056
+1609,Indiana Jones TPA (VPW),1993,Williams,SS,5,637
+1341,Indiana Jones TPA (VPW) (Videos),1993,Williams,SS,5,1181
+430,Indianapolis 500,1995,Bally,SS,,1064
+2009,Inhabiting Mars,2023,Original,Original,,1192
+2418,Ipanema,1976,LTD,SS,,2190
+957,Iron Balls,1987,Unidesa,SS,,2190
+628,Iron Maiden,1982,Stern,SS,,249
+1899,Iron Maiden Legacy of the Beast PRO Tribute (Videos),2022,Original,SS,,1400
+1991,Iron Maiden LOTB Premium (VPW),2018,Stern,SS,5,1168
+1515,Iron Maiden Senjutsu,2021,Original,Original,,1692
+1044,Iron Maiden Virtual Time,2020,Original,Original,4,2190
+1530,Iron Maiden Virtual Time (Videos),2020,Original,Original,,2190
+956,Iron Man,2014,Original,SS,,253
+954,Iron Man - Pro Vault (Videos),2014,Stern,SS,,238
+1962,Iron Man Vault Edition (VPW),2014,Stern,SS,4,2190
+2394,Iron Mike Tyson,2024,,Original,,727
+1959,IT Pinball Madness,2022,Original,Original,5,259
+433,Jack In The Box,1973,Gottlieb,EM,,1075
+2233,Jack Sparrow,2023,Original,Original,,959
+434,Jack-Bot,1995,Williams,SS,,847
+1940,Jackpot,1971,Williams,EM,,480
+1463,Jacks Open,1977,Gottlieb,EM,,883
+1403,Jacks to Open,1984,Gottlieb,SS,,249
+2436,Jake Mate,1974,Petaco,EM,,251
+2483,Jalisco,1976,Recreativos Franco,EM,,259
+1542,Jalopy,1951,Williams,EM,,1672
+2272,James Bond 007,1980,Gottlieb,SS,,883
+435,JAWS,2018,Original,SS,4,637
+2558,JAWS 50th Anniversary,2025,Original,Original,4,2190
+1234444,JAWS 50th Anniversary (Videos),2025,Original,Original,4,325
+436,Jet Spin,1977,Gottlieb,EM,,832
+1553,Jimi Hendrix,2021,Original,Original,,2190
+1291,Jive Time,1970,Williams,EM,,1598
+2468,John Rambo,2024,Original,,,468
+2243,John Wick (Videos),2023,,Original,,883
+437,Johnny Mnemonic (VPW),1995,Williams,SS,,99
+921,Joker Poker (EM),1978,Gottlieb,EM,,1135
+1234483,Joker Poker (SS),1978,Gottlieb,SS,,2190
+1717,Jokerz! (VPW),1988,Williams,SS,4,663
+739,Jolly Park,1996,Spinball S.A.L.,SS,3,252
+2341,Jolly Park Oktoberfest,2024,,,3,2190
+2333,Jolly Roger,1967,Williams,EM,,2190
+1371,Joust,1969,Bally,EM,,2190
+1383,Joust,1983,Williams,SS,,2190
+2002,Jubilee,1973,Williams,EM,,832
+2150,Judas Priest,2019,Original,SS,,629
+899,Judge Dredd (Videos) (VPW),1993,Bally,SS,,1673
+439,Judge Dredd (VPW),1993,Bally,SS,,509
+2261,Jumanji (Videos),2023,Original,Original,,2190
+1292,Jumping Jack,1973,Gottlieb,EM,,880
+440,Jungle,1972,Gottlieb,EM,,880
+2295,Jungle King,1973,Gottlieb,EM,,2190
+2296,Jungle Life,1972,Gottlieb,EM,,2190
+1120,Jungle Lord,1981,Williams,SS,,1314
+1293,Jungle Princess,1977,Gottlieb,EM,4,606
+2298,Jungle Queen,1977,Gottlieb,EM,,2190
+900,Junk Yard,1996,Williams,SS,5,509
+1867,Junkyard Cats,2012,Original,SS,,2190
+1498,Jurassic Park (Videos),1993,Data East,SS,2,2190
+1497,Jurassic Park (VPW),1993,Data East,SS,4,737
+1023,Jurassic Park - The Lost World,1997,Sega,SS,,253
+2405,Jurassic Park Le,None,Stern,SS,,697
+1615,Jurassic Park Limited Edition (Videos),2022,Original,Original,,2190
+2553,Kessel Run,2025,Original,Original,3,2190
+2179,Kick Off!,1977,Bally,EM,,1070
+1294,Kidnap,1986,CIC Play,SS,,2190
+1965,Kill Bill,2022,Original,Original,,2190
+2392,Killer Instinct,2024,Original,Original,,298
+2210,Killer Klowns,2023,,,4,1040
+1234008,Killer Klowns (Videos),2006,Original,FP,4,2190
+2365,Killers Hall of Fame,2023,,Original,,255
+2364,Killers Hall of Fame (Videos),2023,,Original,,255
+1378,Kim Wilde,2020,Original,Original,,321
+2245,KING Donkey Kong,2023,,Original,,938
+443,King Kong,1990,Data East,SS,,1423
+1234505,King Kong,1979,LTD,SS,,2190
+1414,King Kool,1972,Gottlieb,EM,,2190
+1453,King of Diamonds,1967,Gottlieb,EM,,785
+2557,King of the Hill (Videos),2025,Original,Original,,252
+444,King Pin,1973,Gottlieb,EM,,810
+1693,King Pin,1962,Williams,EM,,866
+445,King Rock,1972,Gottlieb,EM,,491
+2442,King Tut,1969,Bally,EM,,2190
+2495,Kingdom,1980,,EM,,249
+446,Kingpin,1996,Capcom,SS,,796
+1234017,Kingpin (1920 Mod),1996,Capcom,SS,4,2190
+1234018,Kingpin (Bigus Mod),1996,Capcom,SS,4,2190
+995,Kings & Queens,1965,Gottlieb,EM,,1519
+1728,Kings of Steel,1984,Bally,SS,,663
+917,KISS,2015,Stern,SS,3,74
+1234460,Kiss (Bally 1979) (VPW),1979,Bally,SS,5,2190
+1234016,Kiss B&W (Videos) (Bally 1979),1979,Bally,SS,,2190
+2027,Klondike,1971,Williams,EM,,880
+2551,Knight Rider,2018,Original,Original,,2190
+1506,Knock Out,1950,Gottlieb,EM,,59
+2148,Kong VS Godzilla,2023,,Original,,49
+1047,Krull,1983,Gottlieb,SS,,42
+2192,Kung Fu,1975,LTD,SS,,251
+2366,Kung Fu Hustle,2024,,Original,,784
+1461,Lady Death,1983,Geiger,SS,,2190
+1013,Lady Luck,1986,Bally,SS,3,2190
+1014,Lady Luck,1978,Taito,SS,,252
+2029,Lady Luck,1976,Recel,EM,,1144
+1368,Lagerstein,2020,Original,EM,2,2190
+1735,Lap By Lap,1986,Inder,SS,,249
+1452,Lariat,1969,Gottlieb,EM,,491
+448,Laser Ball,1979,Williams,SS,,1489
+1997,Laser Cue,1984,Williams,SS,,790
+750,Laser War,1979,Data East,SS,,1423
+1850,Last Action Hero (Videos),1993,Data East,SS,,239
+449,Last Action Hero (VPW),1993,Data East,SS,,737
+1234496,Last Dragon,2025,None,Original,,200
+1731,Last Dragon, The (Videos),2020,Original,Original,,2190
+1295,Last Lap,1978,Playmatic,SS,,2190
+2018,Last Starfighter,2023,Original,Original,3,255
+1234512,Last Unicorn (Videos),2020,None,Original,,2190
+282,Last Unicorn, The,2020,Original,Original,,196
+1114,Lawman,1971,Gottlieb,EM,,880
+1384,Lectronamo,1978,Stern,SS,,847
+1364,Led Zeppelin,2020,Original,EM,,1154
+1910,Led Zeppelin (Videos),2020,Original,SS,,1154
+2010,Led Zeppelin - Psychedelic,2020,Original,SS,,1154
+1234502,LEGEND,2023,None,Original,,2190
+1234503,LEGEND (Videos),2023,None,Original,,2190
+450,Legend of Zelda,2015,Original,SS,,255
+274,Leprechaun King, The,2019,Original,SS,,2190
+881,Lethal Weapon 3 (Videos) (VPW),1992,Data East,SS,,728
+451,Lethal Weapon 3 (VPW),1992,Data East,SS,,728
+452,Liberty Bell,1977,Williams,EM,,2190
+453,Lightning,1981,Stern,SS,,249
+1682,Lightning Ball,1959,Gottlieb,EM,,2190
+1351,Lights...Camera...Action!,1989,Gottlieb,SS,,2190
+2543,Lilo & Stitch,2025,Original,Original,,2190
+1037,Line Drive,1972,Williams,EM,,2190
+1449,Linkin Park,2013,Original,SS,,2190
+2569,Linkin Park (Videos),2024,Original,Original,,2190
+2181,Lion King,The,2020,Original,Original,,2190
+1748,Little Chief,1975,Williams,EM,,251
+1958,Little Joe,1972,Bally,EM,,880
+1574,Little Mermaid, The,2021,Gottlieb,SS,,2190
+1467,Loch Ness Monster,1985,Game Plan,SS,,227
+1234507,Loch Ness Monster (Bord),1985,Game Plan,None,3,2190
+1374,Locomotion,1981,Zaccaria,SS,,2190
+1539,Logan's Run,2021,Original,Original,,880
+1580,Logan's Run (Videos),2021,Original,Original,,2190
+1891,Lone Wolf McQuade,2020,Original,SS,,2190
+1721,Looney Tunes,2022,Original,Original,,2190
+1234508,Lord of the Rings - Hobbit Edition (VPW),2003,Stern,SS,,2190
+1633,Lord of the Rings - Valinor Edition (VPW),2003,Stern,SS,5,509
+991,Lord of the Rings - Valinor Edition (VPW) (Videos),2003,Stern,SS,4,246
+1523,Lortium,1987,Juegos Populares,SS,,2190
+2513,Lost Boys, The,2025,Original,Original,,2190
+914,Lost In Space,1998,Sega,SS,,768
+1234558,Lost In Space (Comic Book Mod),1998,Sega,SS,,2190
+1951,Lost In Space - Retro,1998,Sega,SS,,1104
+915,Lost World,1978,Bally,SS,,866
+1432,Love Bug,1971,Williams,EM,,2190
+1492,Luca,2021,Original,Original,,1648
+1584,Luck Smile 4 player,1976,Inder,EM,,94
+1966,Lucky Ace,1974,Williams,EM,,2190
+1976,Lucky Hand,1977,Gottlieb,EM,,2190
+1660,Lucky Luke,1975,Original,EM,2,2190
+1276,Lucky Seven,1978,Williams,SS,2,1254
+1926,Lucky Strike,1975,Gottlieb,EM,,762
+1941,Lucky Strike,1978,Taito,SS,,252
+992,Lunelle,1981,Taito,SS,,252
+1099,Mac Jungle,1987,MAC S.A.,SS,,1026
+1098,Mac's Galaxy,1986,MAC S.A.,SS,,2190
+2509,Mach 2.0 Two,1995,Spinball S.A.L.,SS,,2190
+1546,Mad Max,2021,Original,Original,,1070
+1274,Mad Race,1985,Playmatic,SS,,249
+1100,Mad Scientist,1996,Maxis,SS,,2190
+1443,Madonna Tribute,2021,Original,Original,,2190
+1275,Magic,1979,Stern,SS,,2190
+1655,Magic Castle,1984,Zaccaria,SS,,2190
+1661,Magic Circle,1965,Bally,EM,2,2190
+1924,Magic City,1967,Williams,EM,5,1189
+943,Magic Clock,1960,Williams,EM,,2190
+1234518,Magic Pinball,2025,None,Original,,2190
+456,Magnotron,1974,Gottlieb,EM,,2190
+937,Mago de Oz,2021,Original,Original,,251
+1334,Major League,1934,PAMCO,EM,,1330
+2232,Mandalorian, The,2023,Zaccaria,Original,,965
+1921,Mandalorian, The (Videos),2020,Original,SS,,2190
+2477,Marble Queen,1953,Gottlieb,EM,,2190
+1379,Mariner,1971,Bally,EM,,842
+848,Mario Andretti,1995,Gottlieb,SS,,231
+1702,Mario Kart,2022,Original,Original,,1488
+1471,Married With Children (Videos),2021,Original,Original,,2190
+994,Mars God of War,1981,Gottlieb,SS,,42
+2182,Mars Trek,1977,Sonic,EM,,65
+2439,Mask, The,None,Original,Original,,2190
+2348,Masquerade,1966,Gottlieb,FP,,257
+457,Masters of the Universe (Videos),2018,Original,SS,,255
+920,Mata Hari,1978,Bally,SS,,289
+2019,Matrix, The,2023,Original,Original,,795
+2353,Matrix, The (Videos),2023,,Original,,142
+1431,Maverick (VPW),1994,Data East,SS,,255
+2274,Maverick (VPW) (Videos),1994,Data East,SS,,2190
+2549,Medieval Castle,2012,Original,,,357
+1234488,Medieval Madness (VPW),1997,Williams,SS,5,223
+1258,Medieval Madness (VPW) (Videos),1997,Williams,SS,5,223
+1016,Medusa,1981,Bally,SS,4,1035
+2264,Megadeth,2023,Original,Original,5,240
+2262,Megadeth (Videos),2023,Original,Original,4,240
+1536,Megamind,2021,Original,Original,,2190
+1119,Melody,1967,Gottlieb,EM,,2190
+460,Memory Lane,1978,Stern,SS,,2190
+2382,Men in Black Trilogy,2024,,Original,,737
+965,Mephisto,1987,Unidesa,SS,,72
+2489,Mermaid,1951,Gottlieb,EM,,2190
+1689,Metal Man,1992,Inder,SS,,252
+2404,Metal Slug,2017,,Original,,2190
+837,Metallica (Videos),2013,Stern,SS,,2190
+737,Metallica Premium Monsters (VPW),2013,Stern,SS,5,491
+462,Meteor,1979,Stern,SS,,1091
+1017,Meteor,1981,Taito,SS,,252
+1623,Metropolis,1982,Maresa,SS,,248
+1732,Metropolis Reborn,2022,Original,Original,3,2190
+2342,MF DOOM (VPW),2024,,Original,,663
+1450,Miami Vice,2020,Original,SS,,2190
+463,Mibs,1969,Gottlieb,EM,,879
+1118,Michael Jackson (Videos),2020,Original,SS,,2190
+897,Michael Jordan,1992,Data East,SS,,2190
+1956,Mickey Mouse Happy Halloween,2022,Original,Original,,2190
+1722,Mickey Mouse in Steamboat Willie,2022,Original,Original,,2190
+1547,Middle Earth,1978,Atari,SS,,821
+2423,Mighty Morphin Power Rangers,2024,,Original,,99
+738,Millionaire,1987,Williams,SS,,2190
+299,Minecraft,2020,Original,SS,,2190
+464,Mini Cycle,1970,Gottlieb,EM,,713
+1913,Mini Golf,1964,Williams,EM,,575
+2275,Mini-Baseball,1972,Chicago Coin,EM,,2190
+283,Miraculous,2019,Original,Original,,259
+1296,Miss-O,1969,Williams,EM,,1160
+1986,Mission Impossible,2022,Original,Original,,1245
+1435,Mississippi,1973,Recreativos Franco,EM,,251
+1394,Moana,2020,Original,Original,,1641
+1581,Moana (Videos),2020,Original,Original,,2190
+2502,Moana 2 (Videos),2025,Original,Original,,2190
+2013,Monaco,1977,Segasa,EM,,65
+465,Monday Night Football,1989,Data East,SS,,2190
+466,Monopoly,2001,Stern,SS,,143
+1234258,Monster Bash (CabMod),1998,Williams,SS,5,2190
+1528,Monster Bash (Videos),1998,Williams,SS,4,2190
+1663,Monster Bash (VPW),1998,Williams,SS,5,688
+918,Monte Carlo,1973,Bally,EM,,2190
+1585,Monte Carlo,1987,Gottlieb,SS,,490
+2470,Monty Python,2024,Original,,,2190
+967,Moon Light,1987,Inder,SS,,255
+1691,Moon Shot,1969,Chicago Coin,EM,,1533
+1974,Mortal Kombat,2022,Original,Original,,1248
+469,Mortal Kombat II,2016,Original,SS,,2190
+1943,Motor Show,1989,Mr. Game,SS,,249
+1985,Motordome,1986,Bally,SS,,248
+1612,Motorhead,2018,Original,SS,,80
+2276,Moulin Rouge,1965,Williams,EM,,257
+964,Mousin' Around!,1989,Bally,SS,,1262
+725,Mr. & Mrs. Pac-Man Pinball,1982,Bally,SS,,1316
+1277,Mr. Black,1982,Taito,SS,,252
+777,Mr. Doom,1979,Recel,SS,2,2190
+1871,Mr. Evil,1979,Recel,SS,,2190
+1872,Mundial 90,1990,Inder,SS,,2190
+1474,Munsters, The (Videos),2020,Stern,SS,4,243
+1407,Mustang,1977,Gottlieb,EM,,397
+1858,Mustang Bullitt LE,2022,Original,SS,,2190
+470,Mustang LE,2014,Stern,SS,,879
+1049,Mystery Castle,1993,Alvin G,SS,3,298
+1508,Mystery Science Theater 3000 Pinball Peril,2021,Original,Original,2,1281
+1313,Mystic,1980,Bally,SS,,248
+1234516,MysticalNinjaGoemon (Original 2025),2025,None,Original,,2190
+2540,Nags,1960,Williams,EM,5,390
+1446,Nairobi,1966,Maresa,EM,,257
+471,NASCAR Race,2005,Stern,SS,,795
+2568,Nascar Race - JP's Mod,2005,Stern,SS,,253
+279,NASCAR, Dale Jr.,2020,Original,SS,,253
+1873,Nautilus,1984,Playmatic,SS,,2190
+851,NBA,2009,Stern,SS,,2190
+1874,NBA,1986,Mac,SS,,2190
+275,NBA Fastbreak (VPW),1997,Bally,SS,,1589
+2570,Near Dark,2025,Original,Original,,2190
+1270,Neptune,1978,Gottlieb,EM,,1062
+2454,Never Mind The Bollocks,2024,Original,Original,,553
+1385,New Wave,1985,Bell Games,SS,,491
+1952,New World,1976,Playmatic,EM,,248
+1021,New York,1976,Gottlieb,EM,2,1462
+1234491,NFL(4k Mod),2001,Stern,SS,,2190
+1666,Night Moves,1989,Gottlieb,SS,,2190
+1409,Night of the Living Dead,2018,Original,EM,,2190
+1297,Night Rider,1976,Bally,SS,,866
+2462,Nightmare Before Christmas,2024,Original,Original,,524
+2464,Nightmare Before Christmas (Videos),2024,Original,Original,,2190
+1456,Nightmare Before Christmas, The,2019,Original,SS,,2190
+505,Nine Ball,1980,Stern,SS,,1488
+919,Nip-It,1973,Bally,EM,,2190
+1033,Nitro Ground Shaker,1980,Bally,SS,,248
+506,No Fear (VPW),1995,Williams,SS,,120
+507,No Good Gofers,1997,Williams,SS,,116
+1504,No Good Gofers (Videos),1997,Williams,SS,,116
+1370,NOBS,2016,Original,SS,3,255
+1036,North Pole,1967,Playmatic,EM,,257
+1034,North Star,1964,Gottlieb,EM,,606
+2240,Nosferatu 1922,2023,Original,Original,,2190
+1694,Now,1971,Gottlieb,EM,,1519
+1711,Nudge-It,1990,Gottlieb,SS,3,2190
+1900,Nudgy,1947,Bally,EM,3,1386
+916,Nugent,1978,Stern,SS,,866
+2396,Nuka Cola - Pop A Top Pinball,2024,,Original,,697
+1500,O Brother, Where Art Thou?,2021,Original,Original,2,2190
+2149,O Gaucho,1975,LTD do Brasil,SS,,226
+1298,OBA OBA,1978,Taito,SS,,252
+1398,Odin Deluxe,1985,Sonic,SS,,2190
+1889,Office, The (Videos),2021,Original,Original,,2190
+509,Old Chicago,1976,Bally,EM,2,878
+510,Old Coney Island,1979,Game Plan,SS,,250
+2517,Old Toons Vol 1,2025,Original,Original,,431
+2519,Old Toons Vol 2,2025,Original,Original,,431
+2524,Old Toons Vol 3,2025,Original,Original,,422
+1314,Olympics,1962,Gottlieb,EM,,215
+2444,Olympics,1975,Chicago Coin,EM,,259
+2278,Olympus,1986,Juegos Populares,SS,,248
+2527,On Beam,1969,Bally,EM,,259
+1359,Once Upon A Time In The West,2019,Original,SS,,2190
+2547,Op-Pop-Pop,1969,Bally,EM,,2190
+1026,Operation Thunder,1992,Gottlieb,SS,,321
+511,Orbit,1971,Gottlieb,EM,,2190
+1406,Orbitor 1,1982,Stern,SS,,2190
+1875,Out Of Sight,1974,Gottlieb,EM,,768
+1716,Outer Space,1972,Gottlieb,EM,,1483
+512,OXO,1973,Williams,EM,,2190
+1234487,OZZY,2025,None,None,,2190
+1343,Pabst Can Crusher,2016,Stern,EM,3,100
+1234549,Pabst Can Crusher (MachOne Mod),2016,Stern,None,3,98
+1665,Palace Guard,1968,Gottlieb,EM,,2190
+1299,Panthera,1980,Gottlieb,SS,,248
+1372,Papa Smurf,2015,Original,SS,,259
+2550,Paradise,1965,Gottlieb,EM,,257
+754,Paragon,1979,Bally,SS,,866
+838,Party Animal,1987,Bally,SS,,1316
+1234475,Party Zone (Mod),1991,Bally,SS,4,2190
+513,Party Zone, The,1991,Bally,SS,,252
+1234484,Pat Hand,1975,Williams,EM,3,2190
+1267,Paul Bunyan,1968,Gottlieb,EM,,2190
+2384,Peaky Blinders (Videos),2022,,Original,,736
+731,Pennant Fever,1984,Williams,SS,3,176
+1345,Peppa Pig,2021,Original,Original,,2190
+1894,Pepsiman,2019,Original,SS,,2190
+2310,Pet Sematary,2019,Original,Original,,2190
+2303,Petaco,1984,Juegos Populares,SS,,248
+582,Phantom of the Opera,1990,Data East,SS,3,863
+1249,Phantom of the Paradise,2021,Original,SS,,389
+1248,Pharaoh,1981,Williams,SS,,874
+1331,Pharaoh - Dead Rise,1981,Williams,SS,2,2190
+1234462,Phase II,1975,J Esteban,None,,2190
+2302,Phil Collins,2023,Original,Original,,2190
+1642,Phoenix,1978,Williams,SS,,250
+2282,Piggy Bank Blitz,2023,,Original,4,391
+516,Pin-Bot,1986,Williams,SS,,1553
+2304,Pinball,1977,Stern,SS,,2190
+1315,Pinball Champ 82,1982,Zaccaria,SS,,2190
+2356,Pinball Lizard,1980,Game Plan,SS,,297
+720,Pinball Magic,1995,Capcom,SS,,266
+1726,Pinball Magic (Balutito Mod),1995,Capcom,SS,4,1483
+515,Pinball Pool,1979,Gottlieb,SS,,1489
+2380,PinBlob,2024,Original,Original,,2190
+2379,PinBlob (Videos),2024,,Original,,2190
+2561,Pink Floyd (Videos),2022,Original,Original,,2190
+876,Pink Floyd Pinball,2020,Original,SS,,2190
+877,Pink Floyds - The Wall,2020,Original,SS,1,2190
+517,Pink Panther,1981,Gottlieb,SS,5,637
+1234562,Pink Panther (Sound Mod),1981,Gottlieb,SS,5,2190
+314,PinUP JukeBox - The 80s,2019,Original,SS,,2190
+518,Pioneer,1976,Gottlieb,EM,,2190
+1373,Pirate Gold,1969,Chicago Coin,EM,,1399
+2395,Pirate's Life,2024,,Original,5,129
+312,Pirates of the Caribbean,2006,Stern,SS,4,1253
+313,Pirates of the Caribbean (Videos),2006,Stern,SS,,242
+1244,Pistol Poker,1993,Alvin G,SS,,2190
+2284,Pit Stop,1968,Williams,EM,,257
+1330,Pizza Time,2020,Original,SS,5,255
+1361,PJ Masks,2020,Original,SS,,2190
+1563,Planet Of The Apes,2021,Original,Original,,1178
+1386,Playball,1971,Gottlieb,EM,,2190
+519,Playboy,1978,Bally,SS,,270
+907,Playboy,2002,Stern,SS,,255
+1234498,Playboy (Mod),2002,Stern,SS,3,2190
+2021,Playboy 35th Anniversary,1989,Data East,SS,,248
+1390,PlayMates,1968,Gottlieb,EM,,2190
+281,Pokemon Pinball,2016,Original,SS,,251
+1978,Pokerino,1978,Williams,SS,,250
+1300,Polar Explorer,1983,Taito,SS,,252
+1346,Pole Position,1987,Sonic,SS,,491
+1590,Police Force (VPW),1989,Williams,SS,,928
+1876,Polo,1970,Gottlieb,EM,,2190
+1975,Poltergeist,2022,Original,Original,,1248
+520,Pool Sharks,1990,Bally,SS,3,252
+1639,Pop-A-Card,1972,Gottlieb,EM,,1472
+521,Popeye Saves the Earth,1994,Bally,SS,,874
+1631,Poseidon,1978,Gottlieb,EM,2,874
+1352,Post Time,1969,Williams,EM,,2190
+1441,Predator,2019,Original,SS,,1091
+1234546,Predator,1986,None,None,,2190
+1234497,Predator (Skit-B Prototype),2015,Skit-B,None,3,2190
+2129,Predator (Videos),2023,Original,Original,,2190
+740,Primus,2018,Stern,SS,,65
+2286,Princess Bride (Videos),2023,,Original,,2190
+1458,Prison Break,2018,Original,SS,,2190
+1640,Pro Football,1973,Gottlieb,EM,,874
+1918,Pro Pool,1973,Gottlieb,EM,,848
+522,Prospector,1977,Sonic,EM,,2190
+1656,Psychedelic,1970,Gottlieb,EM,,2190
+691,Psycho,2019,Original,SS,,1331
+1434,Pulp Fiction,2020,Original,SS,,1257
+2354,Pulp Fiction (Videos),2023,Original,Original,,235
+2491,Punch Out!!,2025,Original,Original,,2190
+1685,Punchy the Clown,1993,Alvin G and Co,SS,,252
+2523,Punk Park,2025,Original,Original,,420
+882,Punk!,1982,Gottlieb,SS,,2190
+1972,Purge (Videos),2022,Original,Original,,1271
+1987,Putin Vodka Mania,2022,Original,Original,,1232
+523,Pyramid,1978,Gottlieb,EM,,874
+790,Q*Bert's Quest,1983,Gottlieb,SS,,2190
+1932,Queen - Show Must Go On,2022,Original,Original,,1303
+1616,Queen Limited Edition,2022,Original,SS,,2190
+2478,Queen of Hearts,1952,Gottlieb,EM,,2190
+1088,Quick Draw,1975,Gottlieb,EM,,2190
+1234461,Quick! Silver!,1980,,SS,,2190
+791,Quicksilver (VPW),1980,Stern,SS,4,364
+1890,Quijote,1987,Juegos Populares,SS,,662
+1271,Rack 'em Up,1983,Gottlieb,SS,,116
+2305,Rack-A-Ball,1962,Gottlieb,EM,,2190
+524,Radical (VPW),1990,Bally,SS,,491
+846,Rainbow,1956,Gottlieb,EM,,757
+1877,Rally,1980,Taito,SS,,248
+1028,Rambo First Blood Part II,2020,Original,SS,,2190
+1505,Ramones,2021,Original,EM,,2190
+1996,Rancho,1976,Williams,EM,,65
+845,Rapid Fire,1982,Bally,SS,,1376
+1923,Rat Fink,2016,Original,SS,,2190
+1234485,Rat Fink,2025,Original,SS,3,2190
+1234528,Rattlecan,2025,None,Original,,133
+1029,Raven,1986,Gottlieb,SS,,1469
+2287,Rawhide,1977,Stern,EM,,226
+1993,Raya and Friends Pinball,2022,Original,Original,,1219
+2397,Raygun Runner,2024,,Original,,714
+1742,Re-Animator,2022,Original,Original,,2190
+1234452,Ready Player One,2025,,Original,,79
+1586,Ready...Aim...Fire!,1983,Gottlieb,SS,,1243
+1905,Red & Ted's Road Show (VPW),1994,Williams,SS,,469
+2381,Red Hot Chili Peppers (Videos),2021,,Original,,2190
+2389,Ren and Stimpy Space Madness (Videos),2024,,Original,,2190
+526,Rescue 911,1994,Gottlieb,SS,,255
+2388,Resident Alien,2024,,Original,,2190
+1897,Rider's Surf,1986,Jocmatic,Original,,2190
+527,Ripley's Believe It or Not! (VPW),2004,Stern,SS,,298
+2571,Ripleys Believe It or Not! - JP's Mod,2004,Stern,SS,,253
+883,Riverboat Gambler,1990,Williams,SS,,1306
+1906,Ro Go,1974,Bally,EM,,2190
+528,Road Kings,1986,Williams,SS,,736
+529,Road Race,1969,Gottlieb,EM,,663
+889,Road Runner,1979,Atari,SS,,1088
+1089,Robo-War,1988,Gottlieb,SS,,696
+308,Robocop,1989,Data East,SS,,255
+1599,Robocop (Videos),1989,Data East,SS,,255
+1927,Robot,1985,Zaccaria,SS,,1064
+2372,Robots Invasion,2019,,Original,,760
+531,Rock,1985,Gottlieb,SS,,248
+1311,Rock Star,1978,Gottlieb,EM,,2190
+532,Rocket III,1967,Bally,EM,,874
+2375,Rockmakers,1968,Bally,EM,3,757
+533,Rocky,1982,Gottlieb,SS,,737
+1240,Rocky,2020,Original,SS,,2190
+1531,Rocky TKO,2021,Original,SS,,1343
+534,Roller Coaster,1971,Gottlieb,EM,,2190
+1977,Roller Coaster Reversed,1971,Gottlieb,EM,,2190
+535,Roller Coaster Tycoon (VPW),2002,Stern,SS,,491
+844,Roller Disco,1980,Gottlieb,SS,1,2190
+536,Rollergames,1990,Williams,SS,,874
+736,Rolling Stones,1980,Bally,SS,,250
+843,Rolling Stones,2011,Stern,SS,,2190
+1572,Rolling Stones - MOD,2011,Stern,SS,,1254
+1301,Roman Victory,1977,Taito do Brasil,SS,,252
+2206,Royal Flush,1976,Gottlieb,EM,,2190
+1302,Royal Flush Deluxe,1983,Gottlieb,SS,,2190
+2306,Royal Guard,1968,Gottlieb,EM,,2190
+2374,Royal Pair,1974,Gottlieb,EM,,2190
+1888,Running Horse,1976,Inder,EM,,250
+1969,Running Man, The (Videos),2019,Original,SS,,2190
+922,Rush 2112,2012,Original,SS,,2190
+2518,Rush LE,2022,Stern,SS,,421
+537,Safe Cracker,1996,Bally,SS,,736
+1995,Saloon,1978,Taito do Brasil,SS,,252
+2419,Samba,1976,LTD,SS,,2190
+2180,Sands of the Aton,2023,Original,Original,,259
+1878,Satin Doll,1975,Williams,EM,,2190
+1668,Scared Stiff (Videos),1996,Bally,SS,4,2190
+538,Scared Stiff (VPW),1996,Bally,SS,5,323
+2504,Scarface (Videos),2025,Original,,4,440
+1573,Schuss,1968,Rally,SS,,257
+1709,Scooby-Doo!,2022,Zaccaria,Original,,1489
+1319,Scooby-Doo! and KISS Rock 'n Roll Mystery,2015,Original,SS,,255
+1090,Scorpion,1980,Williams,SS,1,2190
+2544,Scramble,1987,Tecnoplay,SS,,248
+1234515,SCREAM,2025,None,Original,,2190
+539,Scuba,1970,Gottlieb,EM,,767
+1896,Sea Ray,1971,Bally,EM,3,874
+540,Seawitch,1980,Stern,SS,,248
+1234478,Seawitch (Bord),1980,Stern,SS,,2190
+2424,Secret Agent,2024,,Original,,2190
+1326,Secret Service,1988,Data East,SS,,874
+1567,Seinfeld,2021,Original,Original,,2190
+2422,Senna Prototype Edition,2024,,Original,,248
+285,Serious Sam II,2019,Original,SS,,250
+284,Serious Sam Pinball,2017,Original,SS,,259
+2028,Sesame Street,2023,Original,Original,,1144
+1575,Seven Winner,1973,Inder,EM,,250
+584,Shadow, The,1994,Bally,SS,4,2190
+1433,Shadow, The (Videos),1994,Bally,SS,,2190
+1638,Shamrock,1977,Inder,EM,,250
+1035,Shangri-La,1967,Williams,EM,,2190
+319,Shaq Attaq,1995,Gottlieb,SS,,255
+1260,Shark,1982,Taito,SS,,229
+763,Sharkey's Shootout,2000,Stern,SS,,51
+1332,Sharp Shooter II,1983,Game Plan,SS,,2190
+2214,Sharpshooter,1979,Game Plan,SS,,2190
+541,Sheriff,1971,Gottlieb,EM,,832
+1902,Shining, The,2022,Original,Original,,2190
+1852,Ship Ahoy,1976,Gottlieb,EM,,2190
+1303,Ship-Mates,1964,Gottlieb,EM,,757
+1015,Shock,1979,Taito,SS,,252
+2373,Shooting The Rapids,1979,Zaccaria,SS,,250
+2428,Short Circuit,2024,,Original,,603
+1012,Shovel Knight,2017,Original,Original,,55
+542,Shrek (VPW),2008,Stern,SS,,1089
+1912,Shrek (VPW) (Videos),2008,Stern,SS,,2190
+2515,Silver Bullet,2025,Original,Original,,262
+2492,Silver Cup,1933,Genco,EM,5,390
+1321,Silver Slugger,1990,Gottlieb,SS,,2190
+1304,Silverball Mania,1978,Bally,SS,,297
+1473,Simpsons Pinball Party, The (Videos),2003,Stern,SS,4,2190
+1740,Simpsons Pinball Party, The (VPW),2003,Stern,SS,5,826
+585,Simpsons, The,1990,Data East,SS,,1304
+1093,Simpsons, Treehouse of Horror (Videos),2020,Original,SS,,2190
+1744,Sin City,2022,Original,Original,,2190
+1743,Sin City (Videos),2022,Original,Original,,1422
+544,Sinbad,1978,Gottlieb,SS,,340
+1657,Sing Along,1967,Gottlieb,EM,,2190
+2026,Sir Lancelot,1994,Peyper,SS,,1035
+2355,Sittin' Pretty,1958,Gottlieb,EM,,2190
+1973,Six Million Dollar Man (Videos),1978,Bally,SS,,2190
+587,Six Million Dollar Man, The,1978,Bally,SS,,321
+1555,Skate and Destroy,2019,Original,Original,,2190
+906,Skateball (VPW),1980,Bally,SS,,99
+1697,Skateboard,1980,Inder,SS,,248
+546,Sky Jump,1974,Gottlieb,EM,,2190
+2385,Sky Kings,1974,Bally,EM,2,736
+2289,Sky-Line,1965,Gottlieb,EM,,258
+2288,Skylab,1974,Williams,EM,,65
+1922,Skyrocket,1971,Bally,EM,,2190
+2552,Skyscraper,1934,Bally,EM,5,75
+1649,Skyway,1954,Williams,EM,,1191
+1723,SLAYER,2022,Original,Original,,2190
+2420,Sleic Pinball,1994,Sleic,SS,,2190
+547,Slick Chick,1963,Gottlieb,EM,,767
+935,SlipKnot,None,Original,Original,,2190
+1944,Smart Set,1969,Williams,EM,,2190
+1117,Smurfette,2016,Original,EM,,259
+1011,Snake Machine,1982,Taito,SS,,252
+548,Snow Derby,1970,Gottlieb,EM,,491
+1316,Soccer Kings,1982,Zaccaria,SS,,2190
+2307,Solar City,1977,Gottlieb,EM,,2190
+1305,Solar Fire,1981,Williams,SS,,233
+2520,Solar Ride (EM Underdogs),1979,Gottlieb,EM,3,397
+1234550,Solar Ride (UP),1979,Gottlieb,SS,3,2190
+1741,Solar Wars,1986,Sonic,SS,,248
+2290,Solids N Stripes,1971,Williams,EM,,874
+1306,Solitaire,1967,Gottlieb,EM,,2190
+1116,Sonic The Hedgehog,2005,Original,SS,,662
+970,Sons Of Anarchy,2019,Original,SS,,2190
+289,Sopranos, The,2005,Stern,SS,4,543
+549,Sorcerer,1985,Williams,SS,,440
+823,Soul Reaver,2019,Original,SS,,255
+2534,Sound Stage,1976,Chicago Coin,EM,,259
+550,South Park,1999,Sega,SS,,2190
+949,South Park (Videos),1999,Sega,SS,,2190
+1440,South Park - Halloween (Videos),2020,Original,SS,,2190
+1503,Space Cadet,1995,Microsoft,SS,,251
+1234276,Space Cadet (Mod),,,,4,2190
+2500,Space Cadet Galactic Edition,2025,Original,,5,393
+1879,Space Gambler,1978,Playmatic,SS,3,364
+911,Space Invaders,1980,Bally,SS,,248
+1234540,Space Invaders Mod,1980,Bally,SS,3,2190
+941,Space Jam,1996,Sega,SS,,2190
+942,Space Jam (Videos),1996,Sega,SS,,2190
+1592,Space Mission,1976,Williams,EM,,821
+1737,Space Oddity,2022,Original,Original,,2190
+944,Space Odyssey,1976,Williams,EM,,1070
+2308,Space Orbit,1972,Gottlieb,EM,2,810
+1646,Space Patrol,1978,Taito do Brasil,SS,,252
+2133,Space Poker,1982,LTD do Brasil,SS,,220
+1234543,Space Race (Recel 1977),1977,Recel,None,,2190
+993,Space Rider,1980,Geiger,SS,,248
+2457,Space Riders,1978,Atari,SS,3,78
+551,Space Shuttle,1984,Williams,SS,,1480
+795,Space Shuttle,1984,Taito do Brasil,SS,3,252
+1234521,Space Station (VPW),1987,Williams,SS,4,106
+2572,Space Time,1972,Bally,EM,4,2190
+797,Space Train,1987,MAC S.A.,SS,,2190
+2309,Space Walk,1979,Gottlieb,EM,,2190
+796,SpaceRamp,2020,Original,Original,,864
+553,Spanish Eyes,1972,Williams,EM,3,297
+1568,Spark Plugs,1951,Williams,EM,,2190
+2292,Spawn,2023,,Original,,873
+1259,Speakeasy,1977,Playmatic,EM,,250
+1620,Speakeasy 4,1982,Bally,SS,,255
+1617,Special Force (VPW),1986,Bally,SS,,817
+794,Spectrum (VPW),1982,Bally,SS,,736
+1102,Speed Racer,2017,Original,EM,,1091
+554,Speed Test,1982,Taito,SS,,252
+305,Spider-Man,2011,Original,SS,,253
+557,Spider-Man Classic - Vault Edition (VPW),2020,Original,SS,,736
+1430,Spider-Man Classic VE (Videos),2020,Original,SS,,2190
+697,Spider-Man, The Amazing,1980,Gottlieb,SS,,1091
+2402,Spider-man, The Amazing - Sinister Six Edition,1980,Gottlieb,SS,,643
+1692,Spin Out,1975,Gottlieb,EM,,874
+2312,Spin Wheel,1968,Gottlieb,EM,,2190
+558,Spin-a-Card,1969,Gottlieb,EM,,2190
+1438,Spinning Wheel,1970,Automaticos,EM,,250
+996,Spirit,1982,Gottlieb,SS,,231
+559,Spirit of 76,1975,Gottlieb,EM,4,322
+1420,Split Second,1981,Stern,SS,,48
+1309,SpongeBob,2020,Original,Original,,2190
+1310,SpongeBob's Bikini Bottom Pinball (VPW),2021,Original,Original,5,933
+1234556,Spooky Wednesday,2024,None,Original,,2190
+2313,Spot Pool,1976,Gottlieb,EM,,628
+560,Spot-a-Card,1960,Gottlieb,EM,,2190
+945,Spring Break,1987,Gottlieb,SS,,255
+1027,Spy Hunter,1984,Bally,SS,,1257
+2479,Squid Game,2024,Original,Original,,491
+2291,Stampede,1977,,EM,,250
+2363,Star Action,1973,Williams,EM,,490
+1250,Star Gazer,1980,Stern,SS,4,817
+1234530,Star Gazer (UP),1980,Stern,SS,,157
+1317,Star God,1980,Zaccaria,SS,,728
+1652,Star Light,1984,Williams,SS,4,81
+1880,Star Race,1980,Gottlieb,SS,,321
+2510,Star Ship,1976,Bally,EM,,259
+2438,Star Tours (Videos),2024,,Original,,229
+888,Star Trek,1979,Bally,SS,4,1607
+2455,Star Trek,1971,Gottlieb,EM,,2190
+2421,Star Trek - Mirror Universe,1978,Bally,SS,5,250
+145,Star Trek 25th Anniversary,1991,Data East,SS,3,78
+1095,Star Trek 25th Anniversary (Videos),1991,Data East,SS,,78
+562,Star Trek Enterprise LE (JP's),2013,Stern,SS,4,253
+1234571,Star Trek Enterprise LE (LW),2013,Stern,SS,5,2190
+1338,Star Trek Enterprise LE (Videos),2013,Stern,SS,4,255
+1094,Star Trek The Next Generation (Videos) (VPW),1993,Williams,SS,5,186
+561,Star Trek The Next Generation (VPW),1993,Williams,SS,5,1119
+2334,Star Trip,1979,Game Plan,SS,,250
+952,Star Wars,1987,Sonic,SS,,1281
+962,Star Wars,1978,Gottlieb,EM,,2190
+1234492,Star Wars (Original),2025,None,None,,98
+2015,Star Wars - Bad Batch,2022,Original,Original,,2190
+1005,Star Wars - Bounty Hunter,2021,Original,Original,,1251
+951,Star Wars - Empire Strikes Back, The,1980,Original,SS,,2190
+1415,Star Wars - Greedo's Cantina Pinball,2019,Original,SS,,2190
+564,Star Wars - Trilogy,1997,Sega,SS,4,220
+1234251,Star Wars - Trilogy (Videos),1997,Sega,SS,,176
+778,Star Wars DE (Videos),1992,Data East,SS,,239
+1570,Star Wars DE (VPW),1992,Data East,SS,5,795
+1598,Star Wars DE - Millenium Edition,1992,Data East,SS,,234
+2315,Star Wars Episode 1,1999,Williams,SS,,864
+1516,Star-Jet,1963,Bally,EM,3,728
+1038,Stardust,1971,Williams,EM,,250
+1234463,Stargate (VPW),1995,Gottlieb,SS,5,240
+1650,Stargate (VPW) (Videos),1995,Gottlieb,SS,,240
+1604,Stars,1978,Stern,SS,3,233
+816,Starship Troopers (Videos) (VPW),1997,Sega,SS,,1150
+815,Starship Troopers (VPW),1997,Sega,SS,,1150
+1324,Stellar Airship,1979,Geiger,SS,,2190
+1684,Stellar Wars,1979,Williams,SS,,440
+2521,Steve Miller Band,2025,Original,Original,,421
+1308,Still Crazy,1984,Williams,SS,3,226
+1413,Stingray,1977,Stern,SS,,845
+1945,Stock Car,1970,Gottlieb,EM,,2190
+1967,Straight Flush,1970,Williams,EM,,250
+824,Strange Science,1986,Bally,SS,,1400
+925,Strange World,1978,Gottlieb,EM,,864
+1101,Stranger Things (Original - 2017),2017,OrbitalPin,SS,3,243
+1234431,Stranger Things - Stranger Edition,2018,Original,SS,5,234
+1234482,Stranger Things 4 Premium,2018,Original,SS,4,2190
+1733,Strato-Flite,1974,Williams,EM,,1218
+1460,Street Fighter II (Videos),1993,Gottlieb,SS,,253
+924,Street Fighter II (VPW),1993,Gottlieb,SS,5,99
+1459,Streets of Rage,2018,Original,SS,,2190
+2480,Strike,1978,Zaccaria,SS,,259
+1388,Strike Zone,1984,Williams,SS,,2190
+1881,Striker,1982,Gottlieb,SS,,762
+1367,Striker Xtreme,2000,Stern,SS,,2190
+565,Strikes and Spares,1978,Bally,SS,,1135
+1566,Strikes and Spares - The Dude (Videos),2021,Original,Original,,2190
+758,Strikes and Spares - The Dude Mod,1978,Bally,SS,,2190
+936,Strikes N' Spares,1995,Gottlieb,SS,,1181
+1946,Student Prince,1968,Williams,EM,,2190
+2535,Sublime,2025,Original,,,394
+1882,Sultan,1978,Taito do Brasil,SS,,252
+2445,Summer Time,1972,Williams,EM,,248
+1736,Sunset Riders Pinball,2022,Original,Original,,1338
+566,Super Mario Bros.,1992,Gottlieb,SS,,863
+1750,Super Mario Bros. Mushroom World,1992,Gottlieb,SS,,662
+1468,Super Mario Galaxy Pinball,2020,Original,SS,,2190
+2327,Super Nova,1980,Game Plan,SS,,2190
+2324,Super Orbit,1983,Gottlieb,SS,,861
+2317,Super Score,1967,Gottlieb,EM,,258
+2318,Super Soccer,1975,Gottlieb,EM,,2190
+969,Super Spin,1977,Gottlieb,EM,,559
+1968,Super Star,1972,Williams,EM,,250
+2446,Super Star,1975,Chicago Coin,EM,,259
+2007,Super Straight,1977,Sonic,EM,,250
+2406,Super-Flite,1974,Williams,EM,,2190
+567,Superman,1979,Atari,SS,2,2190
+2008,Superman (Videos),1979,Atari,SS,,1198
+2451,Superman and the Justice League,2024,Original,,,468
+2503,Supersonic,1979,Bally,SS,,2190
+934,Supersonic - JPs Mod,1979,Bally,SS,,250
+1676,Sure Shot,1976,Gottlieb,EM,,863
+1677,Sure Shot,1981,Taito,SS,,252
+933,Surf 'n Safari,1991,Gottlieb,SS,,255
+1610,Surf Champ,1976,Gottlieb,EM,,636
+1907,Surf Side,1967,Gottlieb,EM,,2190
+568,Surfer,1976,Gottlieb,EM,,695
+2407,Swamp Thing,2024,,Original,,635
+1853,Sweet Hearts,1963,Gottlieb,EM,,2190
+2319,Sweet Sioux,1959,Gottlieb,EM,,258
+1611,Swing-Along,1963,Gottlieb,EM,,1594
+1437,Swinger,1972,Williams,EM,2,696
+569,Swords of Fury,1988,Williams,SS,,841
+1670,T.K.O.,1979,Gottlieb,EM,,767
+1953,Tag-Team Pinball,1985,Gottlieb,SS,,696
+1234010,Tales from the Crypt (VPW),1993,Data East,FP,4,2190
+1496,Tales from the Crypt (VPW) (Videos),1993,Data East,SS,5,1470
+316,Tales of the Arabian Nights,1996,Williams,SS,5,63
+1362,Tangled,2021,Original,Original,,1654
+1898,Tango & Cash,2019,Original,Original,,2190
+571,Target Alpha,1976,Gottlieb,EM,,541
+1234563,Tasty Samba,1977,Inder,EM,,2190
+572,Taxi (Videos),1988,Williams,SS,,239
+1447,Taxi (VPW),1988,Williams,SS,,239
+1518,Taylor Swift,2021,Original,Original,,2190
+1534,Taylor Swift (Videos),2021,Original,Original,,2190
+2387,Taylor Swift Eras Tour Pinball,2024,,Original,,2190
+1307,Teacher's Pet,1965,Williams,EM,,490
+1883,Team One,1977,Gottlieb,EM,,92
+574,Tee'd Off,1993,Gottlieb,SS,,863
+575,Teenage Mutant Ninja Turtles,1991,Data East,SS,,133
+866,Teenage Mutant Ninja Turtles (Videos),1991,Data East,SS,,133
+2458,Teenage Mutant Ninja Turtles Mod,2024,Original,Original,,99
+1564,Ten Stars,1976,Zaccaria,EM,,2190
+1353,Ten Strike Classic,1990,Benchmark Games,SS,,255
+2490,Tenacious D,2025,Original,Original,,484
+1357,Terminator,2019,Original,SS,,2190
+576,Terminator 2 Judgement Day,1991,Williams,SS,4,490
+1587,Terminator 2 Judgement Day (Videos),1991,Williams,SS,4,490
+2357,Terminator 3: Rise of the Machines,2003,Stern,SS,4,297
+1719,Terrific Lake,1987,Sportmatic,SS,,582
+2443,Terrifier,2024,,Original,,218
+2320,Texas Ranger,1972,Gottlieb,EM,,2190
+1234464,The Crow (Original 2025),2025,None,None,,2190
+1234539,The Matrix (Original 2026),2026,None,None,5,66
+2541,The Paw Patrol,2020,Original,Original,,2190
+1234455,The Shining,2025,None,None,,144
+1234454,The Shining (Videos),2025,None,None,,144
+1538,Theatre of Houdini (Videos),2021,Original,SS,,2190
+147,Theatre of Magic,1995,Bally,SS,5,269
+2208,They Live,2023,,Original,,1055
+2209,They Live (Videos),2023,Original,Original,2,2190
+1729,Thing, The,2022,Original,SS,,2190
+1333,Three Angels,2018,Original,SS,,439
+2469,Thunder Man,1987,AppleTime,,3,508
+1745,Thunderbirds,2022,Original,Original,,840
+2012,Thundercats (Videos),2023,Original,Original,,255
+2408,Ticket Tac Toe,1995,Williams,SS,,629
+2321,Tiger,1975,Gottlieb,EM,,2190
+2023,Tiger King (Videos),2020,Original,Original,,2190
+1234459,Tiki Bob's Atomic Beach Party,2021,None,None,4,2190
+1234509,Time Fantasy (VPW),1983,Williams,SS,3,190
+1509,Time Line,1980,Gottlieb,SS,2,321
+732,Time Machine,1988,Data East,SS,4,64
+1707,Time Tunnel,1971,Bally,EM,3,2190
+1577,Time Warp,1979,Williams,SS,4,486
+1893,TimeLord,2022,Original,Original,,114
+1605,Timon & Pumbaa,2021,Original,Original,,2190
+2559,Tiros,1969,Maresa,,,258
+1389,Titan,1982,Taito do Brasil,SS,,252
+1234527,Titan (Lipebello Mod),1982,Taito do Brasil,SS,,162
+1472,Title Fight,1990,Gottlieb,SS,,1306
+1998,Toledo,1975,Williams,EM,,2190
+301,Tom and Jerry,2018,Original,SS,,255
+1337,Tom and Jerry (Videos),2018,Original,SS,4,255
+2485,Tomb Raider (Videos),2025,Original,,,279
+1339,Tomb Raider - A Survivor is Born,2019,Original,Original,,2190
+591,Tommy, The Who's (VPW),1994,Data East,SS,4,557
+1405,Tool (Videos),2020,Original,SS,,2190
+1687,Top Card,1974,Gottlieb,EM,,2190
+997,Top Gun (Videos),2019,Original,SS,,2190
+2215,Top Hand,1973,Gottlieb,EM,,2190
+1404,Top Score,1975,Gottlieb,EM,,863
+2322,Topaz,1979,Inder,,,2190
+2508,Torch,1980,Gottlieb,SS,,421
+2463,Tornado Rally,2024,Original,EM,,490
+1524,Torpedo,1976,Recel S.A.,EM,,250
+1051,Torpedo Alley,1988,Data East,SS,,2190
+1493,Total Nuclear Annihilation (VPW),2017,Spooky Pinball,SS,5,80
+1045,Totem,1979,Gottlieb,SS,,451
+2539,Totem,1979,Electromatic Brasil,EM,,250
+1675,Touchdown,1967,Williams,EM,,2190
+1885,Touchdown,1984,Gottlieb,SS,,490
+2358,Toy Story, 90s,2024,,Original,,802
+1886,Trailer,1985,Playmatic,SS,,2190
+2409,Trailer Park Boys - Pinballers,2024,,Original,,2190
+787,Transformers,2011,Stern,SS,4,297
+788,Transformers (Videos),2011,Stern,SS,,1316
+1327,Transporter the Rescue (VPW),1989,Bally,SS,,1256
+2447,Travel Time,1972,Williams,EM,,248
+595,Tri Zone,1979,Williams,SS,,629
+2437,Trick 'r Treat,2023,,Original,,99
+1990,Trick Shooter,1980,L.T.D,SS,,248
+2512,Trident,1979,Stern,SS,3,184
+1667,Triple Action,1973,Williams,EM,,863
+596,Triple Strike,1975,Williams,EM,4,238
+884,Trolls (Videos),2021,Original,Original,,2190
+772,TRON Classic,2018,Original,SS,3,152
+1540,TRON Legacy (VPW),2011,Stern,SS,5,90
+774,TRON Legacy (VPW) (Videos),2011,Stern,SS,5,90
+1234002,TRON Neon,2023,Original,SS,,170
+1908,Tropic Fun,1973,Williams,EM,,2190
+1234570,Tropic Isle,1962,Gottlieb,EM,,2190
+765,Truck Stop,1988,Bally,SS,,364
+598,Twilight Zone (VPW),1993,Bally,SS,5,677
+792,Twilight Zone (VPW) (Videos),1993,Bally,SS,5,2190
+1662,Twin Peaks,2022,Original,Original,3,234
+1234545,Twin Peaks Deluxe,2026,None,None,,121
+1234486,Twinky,1967,Chicago Coin,None,,65
+2410,Twisted Metal,2024,,Original,,695
+294,Twister,1996,Sega,SS,4,662
+1527,Twister (Videos),1996,Sega,SS,,201
+1234526,Twister (VPW),1996,Sega,SS,,2190
+599,TX-Sector,1988,Gottlieb,SS,,490
+1851,U-Boat 65,1988,Nuova Bell Games,SS,,2190
+1251,U-Foes,2019,Original,SS,,2190
+1525,Underwater,1976,Recel S.A.,EM,,250
+1565,Universe,1976,Zaccaria,EM,,2190
+2323,Universe,1959,Gottlieb,EM,,258
+1502,Unreal Tournament,2021,Original,Original,,1510
+2151,Untouchables, The,2023,Original,Original,,2190
+1545,V.1,1986,IDSA,SS,,1672
+2545,Vampire,1971,Bally,EM,,250
+2429,Vampirella,2024,,Original,,99
+310,Van Halen Pinball,2020,Original,SS,,2190
+1234467,Vector (VPW),1982,Bally,SS,5,121
+1335,Vector Pinball,2021,Original,Original,,121
+782,Vegas,1990,Gottlieb,SS,,1304
+783,Vegas,1978,Taito,SS,,252
+2325,Verne's World,1996,Spinball S.A.L.,SS,,252
+784,Victory,1987,Gottlieb,SS,,1090
+785,Viking,1980,Bally,SS,,1280
+1713,Vikings,2022,Original,Original,,2190
+600,Viper,1981,Stern,SS,,248
+287,Viper Night Drivin',1998,Sega,SS,,863
+1048,Volcano,1981,Gottlieb,SS,,2190
+2172,Volkan X,2023,,Original,5,928
+601,Volley,1976,Gottlieb,EM,,44
+1916,Volley,1981,Taito do Brasil,SS,,252
+1344,Voltan Escapes Cosmic Doom,1979,Bally,SS,5,468
+1234523,Voodoo Ranger (ROCK 1985 MOD),None,None,SS,,2190
+1698,Voodoo's Carnival,2022,Original,Original,,255
+1917,Vortex,1983,Taito,SS,,252
+2326,Vulcan,1977,Gottlieb,EM,,2190
+2386,Vulcan IV,1980,Rowamet,SS,,728
+1720,Wacky Races,2022,Original,Original,,1484
+853,Walking Dead, The (Limited Edition),2014,Stern,SS,5,364
+852,Walking Dead, The (Videos),2014,Stern,SS,,239
+986,Walking Dead, The Moon  (Videos),2017,Original,SS,,2190
+1892,Walkyria,1986,Joctronic,SS,,2190
+2511,Wallace and Gromit,2015,Original,Original,,434
+940,Warlok (VPW),1982,Williams,SS,4,490
+1234510,Warrior Sea,1977,Eletromatic,None,,193
+953,Watchmen,2019,Original,SS,,1251
+830,Waterworld,1995,Gottlieb,SS,,255
+1439,Way of the Dragon, The (Videos),2020,Original,SS,,2190
+1325,Wayne's World,2020,Original,SS,,2190
+1342,Web, The Pro Pinball,1995,Cunning Developments,SS,,2190
+2331,Wednesday,2023,,Original,,2190
+602,Wheel Of Fortune,2007,Stern,SS,,2190
+1336,Whirl-Wind (Gottlieb 1958),1958,Gottlieb,EM,2,2190
+603,Whirlwind,1990,Williams,SS,5,1519
+604,White Water,1993,Williams,SS,5,860
+605,WHO dunnit,1995,Bally,SS,3,1061
+726,WHO dunnit 1947,1995,Bally,SS,,2190
+1901,Who Framed Roger Rabbit,2021,Original,Original,,2190
+1234465,Whoa Nellie (MachWon Mod),2015,Stern,SS,4,111
+606,Whoa Nellie! Big Juicy Melons,2015,Stern,EM,,259
+762,Wiggler, The,1967,Bally,EM,,1400
+2514,Wiggler, The JP's Mod,1967,Bally,EM,,259
+761,Wild Card,1977,Williams,EM,,1026
+1517,Wild Fyre,1978,Stern,SS,,2190
+2448,Wild West,2024,,Original,3,121
+607,Wild Wild West,1969,Gottlieb,EM,,860
+1699,Wild Wild west,2022,Original,Original,,2190
+1234493,Willow,2025,Original,None,,213
+1234494,Willow (Videos),2025,Original,None,,213
+300,Willy Wonka,2021,Original,SS,,232
+2452,Willy Wonka Pro LE,2024,,SS,,255
+903,Willy's Wonderland,2021,Original,SS,,1692
+2328,Wimbledon,1978,Electromatic,SS,,250
+608,Wipe Out,1993,Gottlieb,SS,,1363
+307,Witcher, The,2020,Original,SS,,1182
+298,Wizard of Oz,2018,Original,SS,3,255
+2516,Wizard of Oz - Yellow Brick Road Ed.,2018,Original,Original,,2190
+1380,Wizard!,1975,Bally,EM,,1070
+1554,Wolf Man,1987,Peyper,SS,,2190
+1234557,Wolfenstein 3-D Ultimate,2026,None,None,,78
+2160,Wonderland,1955,Williams,EM,,1025
+1727,Woody Woodpecker,2022,Original,Original,,2190
+1401,World Challenge Soccer,1994,Gottlieb,SS,,254
+609,World Cup,1978,Williams,SS,,250
+1234453,World Cup Soccer (VPW),1994,Bally,SS,5,116
+2450,World Joker Tour,2024,,Original,,253
+735,World of Warcraft - Monopoly,2015,Original,SS,,253
+734,World Poker Tour,2006,Stern,SS,3,297
+1909,World Series,1972,Gottlieb,EM,,1025
+1507,World's Fair Jigsaw,1933,Rock-ola,EM,2,2190
+1641,Wrath of Olympus,2015,Riot Pinball,Original,,255
+733,WWF Royal Rumble,1994,Data East,SS,,80
+1644,WWF Royal Rumble (Videos),1994,Data East,SS,,2190
+1510,X's & O's,1984,Bally,SS,,2190
+1234559,X-Files,1997,Sega,SS,5,2190
+780,X-Files (Videos),1997,Sega,SS,,85
+1318,X-Men LE (Videos),2012,Stern,SS,,100
+1971,X-Men LE (VPW),2012,Stern,SS,,116
+2329,Xenon,1980,Bally,SS,5,248
+1252,Yamanobori,1981,Komaya,SS,3,484
+1278,Yello Pinball Cha Cha,2021,Original,Original,1,2190
+1537,Young Frankenstein,2021,Original,Original,,2190
+1234500,Young Frankenstein,2025,Original,SS,,2190
+2465,You’ll Shoot Your Eye Out!,2024,Original,Original,,524
+2330,Yukon,1971,Williams,EM,,2190
+1256,Zarza,1982,Taito,SS,,252
+1887,Zephy,1982,LTD,SS,,248
+615,Zip-A-Doo,1970,Bally,EM,,1025
+1870,Zissou -The Life Aquatic,2022,Original,Original,,2190
+2411,Zone Fury,2023,Original,Original,,695
+1399,ZZ Top (Videos),2021,Original,Original,,2190
+    
+    ---
+    [ANALYSIS STEP]
+    Before selecting tables, analyze the play history in two separate tracks:
+    1. General History (top_played_general): Identify favorite eras (e.g., 90s DMD), manufacturers (e.g., Williams, Bally, Stern), and high-engagement tables.
+    2. EM History (top_played_em): Identify mechanical style preferences (e.g., Gottlieb 70s) and high-engagement tables.
+    
+    ---
+    [SCORING CRITERIA]
+    Rank candidate tables using the following scoring logic:
+    1. Core Match: High points for matching a manufacturer or era dominant in the user's top history.
+    2. Theme Alignment: Bonus points if the table's theme aligns with frequently played tables (e.g., if user plays a lot of space-themed tables, a new space-themed table gets a boost).
+    3. Freshness Boost: Add a moderate weight if "updated_days_ago" is less than 180.
+    4. Creator Boost: Add a moderate weight if the game name or metadata from online sources indicates it is by: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, or EMUnderdogs.
+    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as a strong signal of taste.
+       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns. Tables rated 4 are strong positives. Rating 3 is neutral. Ratings 1-2 are dislikes — however, don't overly penalize them because we don't know the reason - it could be a low quality version of an otherwise fantastic theme.
+       - In candidate_pool: strongly prefer candidates rated 4-5, give a small boost to 3, and penalize candidates rated 1-2 so they are only recommended if other signals are overwhelmingly strong.
+       - An empty/missing rating means unknown — treat as neutral; do not boost or penalize based on rating alone.
+    
+    ---
+    [CRITICAL CONSTRAINTS]
+    - Separated Output: "general" recommendations must NEVER have type 'EM'. "em" recommendations must ALWAYS have type 'EM'.
+    - Strict Counts: Output exactly 10 items for "general" and exactly 5 items for "em".
+    - Exact Matching: The "id" and "game" string fields must perfectly match the database values provided in the candidate pool.
+    - Deduplication: Never recommend the same base game title twice. If a game has a standard version and a "(Videos)" version in the pool, prioritize the standard version and discard the "(Videos)" version. Do not output both.
+    - Candidate Isolation: Only recommend games that are explicitly listed in the "candidate_pool". 
+    - Do not recommend games from the play history if they were last played within 90 days (i.e., last_played < 90). Games in the history with last_played >= 90 ARE eligible for recommendation since enough time has passed.
+
+    ---
+    [OUTPUT FORMAT]
+    Return ONLY a raw JSON object. Do not include markdown formatting, markdown code blocks (such as ```json) or any conversational text. 
+
+    JSON Schema:
+    {
+      "general": [
+        {
+          "id": <int/string GameId>,
+          "game": "<string exact_name>",
+          "confidence": <float between 0.0 and 1.0>
+        }
+      ],
+      "em": [
+        {
+          "id": <int/string GameId>,
+          "game": "<string exact_name>",
+          "confidence": <float between 0.0 and 1.0>
+        }
+      ]
+    }
+
+    

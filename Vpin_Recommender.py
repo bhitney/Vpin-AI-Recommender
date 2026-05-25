@@ -15,6 +15,7 @@ from google.genai import types
 # ==============================================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PAYLOAD_PATH = os.path.join(SCRIPT_DIR, "ai_prompt_payload_compact.txt")
+PROMPT_PATH = os.path.join(SCRIPT_DIR, "ai_prompt_full.txt")
 RECS_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "ai_recommendations.json")
 
 # Minimum age (in minutes) before re-generating recommendations
@@ -22,7 +23,7 @@ MAX_AGE_MINUTES = 1
 
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
-TARGET_EMU_IDS = "1,2,3,4" # add whaevever EMUIDs to include in analysis
+TARGET_EMU_IDS = "10" # add whaevever EMUIDs to include in analysis
 
 # Update a PinUp Popper playlist with recommended games?
 UPDATE_PLAYLIST = True
@@ -41,6 +42,10 @@ INCLUDE_NON_RATED = 1
 
 # Number of days of play history to analyze
 HISTORY_DAYS = 365
+
+# Games played within this many days are excluded from recommendations.
+# Games in the history but last played MORE than this many days ago can still be recommended.
+REPLAY_WINDOW_DAYS = 90
 
 # Include "not_owned" recommendations from the VPIN Spreadsheet?
 # This is currently deactivated as there were inaccurate results trying to match real vs virtual with games the user doesn't have - 
@@ -61,6 +66,7 @@ HISTORY_QUERY_GENERAL = f"""
 SELECT 
     count(1) as TotalPlays, 
     sum(SessionPlayedSecs) as TotalTimePlayedSecs, 
+    CAST(JULIANDAY('now') - JULIANDAY(max(cgl.PlayDate)) AS INTEGER) AS LastPlayedDays,
     g.GameId,
     GameDisplay, 
     GameYear, 
@@ -72,7 +78,7 @@ JOIN CustomGameLog cgl ON g.GameID = cgl.GameID
 WHERE g.EMUID in ({TARGET_EMU_IDS}) 
   and g.visible=1 
   and PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
-  and g.GameType <> 'EM'
+  and g.GameType IS NOT 'EM'
 GROUP BY cgl.GameID 
 HAVING TotalPlays > 1
 ORDER BY TotalPlays DESC
@@ -83,6 +89,7 @@ HISTORY_QUERY_EM = f"""
 SELECT 
     count(1) as TotalPlays, 
     sum(SessionPlayedSecs) as TotalTimePlayedSecs, 
+    CAST(JULIANDAY('now') - JULIANDAY(max(cgl.PlayDate)) AS INTEGER) AS LastPlayedDays,
     g.GameId,
     GameDisplay, 
     GameYear, 
@@ -151,13 +158,13 @@ def extract_data():
         return ""
 
     lines = []
-    lines.append("## top_played_general [id,plays,secs,game,year,mfr,type,rating]")
+    lines.append("## top_played_general [id,plays,secs,last_played,game,year,mfr,type,rating]")
     for row in played_history_general:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
-    lines.append("## top_played_em [id,plays,secs,game,year,mfr,type,rating]")
+    lines.append("## top_played_em [id,plays,secs,last_played,game,year,mfr,type,rating]")
     for row in played_history_em:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
     lines.append("## candidate_pool [id,game,year,mfr,type,rating,updated_days_ago]")
     for row in available_catalog:
@@ -198,11 +205,12 @@ def fetch_recommendations(cabinet_data):
     You are an expert Virtual Pinball recommendation engine.
     Your objective is to analyze a user's play history and select the best matching games from an available "candidate_pool". 
     The data below uses a compact format:
-    - "top_played_general" rows are: id,plays,seconds,game,year,manufacturer,type,rating (non-EM history)
-    - "top_played_em" rows are: id,plays,seconds,game,year,manufacturer,type,rating (EM history)
+    - "top_played_general" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (non-EM history)
+    - "top_played_em" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (EM history)
     - "id" is the unique GameId from the database
     - "plays" is the total number of play sessions in the last {HISTORY_DAYS} days
     - "seconds" is the total time played in seconds in the last {HISTORY_DAYS} days
+    - "last_played" is the number of days since the game was last played
     - "candidate_pool" rows are: id,game,year,manufacturer,type,rating,updated_days_ago
     - "id" is the unique GameId from the database
     - "updated_days_ago" is how many days ago the table file was last updated
@@ -237,7 +245,7 @@ def fetch_recommendations(cabinet_data):
     - Exact Matching: The "id" and "game" string fields must perfectly match the database values provided in the candidate pool.
     - Deduplication: Never recommend the same base game title twice. If a game has a standard version and a "(Videos)" version in the pool, prioritize the standard version and discard the "(Videos)" version. Do not output both.
     - Candidate Isolation: Only recommend games that are explicitly listed in the "candidate_pool". 
-    - Do not recommend games that are in the play history, as the user has recently played them. Only recommend the games the user has not played recently.
+    - Do not recommend games from the play history if they were last played within {REPLAY_WINDOW_DAYS} days (i.e., last_played < {REPLAY_WINDOW_DAYS}). Games in the history with last_played >= {REPLAY_WINDOW_DAYS} ARE eligible for recommendation since enough time has passed.
 
     ---
     [OUTPUT FORMAT]
@@ -264,6 +272,11 @@ def fetch_recommendations(cabinet_data):
     """
 
     log("[+] Initializing Gemini Client...")
+
+    with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
+        f.write(prompt)
+    log(f"[+] Saved full AI prompt to: {PROMPT_PATH}")
+
     client = genai.Client(api_key=GEMINI_API_KEY)
     # log("[+] Initializing Groq Client...")
     # client = Groq(api_key=GROQ_API_KEY)

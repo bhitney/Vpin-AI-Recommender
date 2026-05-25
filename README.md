@@ -201,6 +201,7 @@ The script will:
 .venv/
 .env
 ai_prompt_payload_compact.txt
+ai_prompt_full.txt
 ai_recommendations.json
 ```
 
