@@ -2,6 +2,7 @@
 .env
 .vs/
 ai_prompt_payload_compact.txt
+ai_prompt_full.txt
 ai_prompt_payload.json
 ai_recommendations.json
 ai_recommendations old.json
