@@ -6,8 +6,9 @@ An AI-powered virtual pinball table recommendation engine for PinUp Popper cabin
 
 - Analyzes play history separately for **General** (non-EM) and **EM** (electromechanical) tables
 - Returns two distinct recommendation sets tailored to each category
-- Weights recommendations toward recently updated tables and known high-quality creators (VPW, SuperTilted, VPX Wizards, Pincredibles, EMUnderdogs)
-- Automatically updates a PinUp Popper playlist with results
+- Weights recommendations toward recently updated tables and known high-quality creators (configurable - you can adjust the weights in the script)
+- Factors in game ratings, recency, and other factors to help you discover new tables that match your play style and preferences
+- Optionally updates a PinUp Popper playlist with results
 - Optionally tags recommended games with `AI_Suggested` for dynamic playlist creation
 
 ## Warning
@@ -19,6 +20,8 @@ This is a prototype and requires manual setup and knowledge of Python and SQL. I
 - Python 3.10+
 - A PinUp Popper installation with `PUPDatabase.db`
 - A [Google Gemini API key](https://aistudio.google.com/apikey)
+- The `CustomGameLog` table and triggers must be set up in your `PUPDatabase.db` — see [CustomGameLog creation](#customgamelog-creation) below
+
 
 ## Setup
 
@@ -31,8 +34,14 @@ cd Vpin_Recommender
 
 ### 2. Create a virtual environment
 
+If `python` is on your PATH (common on Linux/macOS or single-version Windows installs):
 ```cmd
 python -m venv .venv
+```
+
+If you have multiple Python versions installed on Windows, use the [Python Launcher (`py`)](https://docs.python.org/3/using/windows.html#python-launcher-for-windows) to ensure the correct version is used:
+```cmd
+py -m venv .venv
 ```
 
 ### 3. Activate the virtual environment
@@ -232,17 +241,13 @@ CREATE TRIGGER GameStatsInsertTrigger AFTER INSERT ON GamesStats
 BEGIN
     INSERT INTO CustomGameLog (GameID, PlayDate, SessionPlayedSecs, TotalTimePlayedSecs, Flags)
     VALUES (NEW.GameID, NEW.LastPlayed, NEW.TimePlayedSecs, NEW.TimePlayedSecs, 'I');
-    UPDATE Games SET Custom5 = (SELECT COUNT(1) FROM CustomGameLog WHERE GameId = NEW.GameID)
-    WHERE GameId = NEW.GameID;
 END;
 
 CREATE TRIGGER GameStatsUpdateTrigger AFTER UPDATE ON GamesStats
 BEGIN
     INSERT INTO CustomGameLog (GameID, PlayDate, SessionPlayedSecs, TotalTimePlayedSecs, Flags)
     VALUES (NEW.GameID, NEW.LastPlayed, (NEW.TimePlayedSecs - OLD.TimePlayedSecs), NEW.TimePlayedSecs, 'U');
-    UPDATE Games SET Custom5 = (SELECT COUNT(1) FROM CustomGameLog WHERE GameId = NEW.GameID)
-    WHERE GameId = NEW.GameID;
 END;
 ```
 
-> **Note:** The triggers also optionally update `Games.Custom5` with the total play count for each game, which can be used for display in PinUp Popper menus. This is completely optional — if you don't need it, you can safely remove the `UPDATE Games SET Custom5 ...` lines from both triggers.
+**Note: The TotalTimePlayedSecs and Flags are primarily there for debugging/validation.

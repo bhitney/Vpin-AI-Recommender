@@ -18,7 +18,7 @@ PAYLOAD_PATH = os.path.join(SCRIPT_DIR, "ai_prompt_payload_compact.txt")
 RECS_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "ai_recommendations.json")
 
 # Minimum age (in minutes) before re-generating recommendations
-PAYLOAD_MAX_AGE_MINUTES = 1
+MAX_AGE_MINUTES = 1
 
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
@@ -43,6 +43,10 @@ INCLUDE_NON_RATED = 1
 HISTORY_DAYS = 365
 
 # Include "not_owned" recommendations from the VPIN Spreadsheet?
+# This is currently deactivated as there were inaccurate results trying to match real vs virtual with games the user doesn't have - 
+# specifically we saw lots of games we already had, or games not available virtually. 
+# Additionally, this is designed to run periodically and update popper, so there'd be no practical way to surface tables not owned in the playlist.
+# Currently not worth the token overhead but an interesting idea for future enhacement
 INCLUDE_NOT_OWNED = False
 NUM_NOT_OWNED = 5
 
@@ -61,7 +65,8 @@ SELECT
     GameDisplay, 
     GameYear, 
     Manufact,
-    GameType
+    GameType,
+    GameRating
 FROM Games AS g 
 JOIN CustomGameLog cgl ON g.GameID = cgl.GameID 
 WHERE g.EMUID in ({TARGET_EMU_IDS}) 
@@ -82,7 +87,8 @@ SELECT
     GameDisplay, 
     GameYear, 
     Manufact,
-    GameType
+    GameType,
+    GameRating
 FROM Games AS g 
 JOIN CustomGameLog cgl ON g.GameID = cgl.GameID 
 WHERE g.EMUID in ({TARGET_EMU_IDS}) 
@@ -96,7 +102,7 @@ LIMIT 60
 """
 
 LOCAL_CATALOG_QUERY = f"""
-SELECT GameId, GameDisplay, GameYear, Manufact, GameType,
+SELECT GameId, GameDisplay, GameYear, Manufact, GameType, GameRating,
     coalesce(CAST(julianday('now') - julianday(DateFileUpdated) AS INTEGER),6*365) AS LastUpdatedDays
 FROM Games 
 WHERE EMUID in ({TARGET_EMU_IDS}) 
@@ -134,18 +140,28 @@ def extract_data():
 
     conn.close()
 
+    def fmt_rating(val):
+        # 1-5 are valid; anything else (None, '', 0, out-of-range) is unknown
+        try:
+            r = int(val)
+            if 1 <= r <= 5:
+                return str(r)
+        except (TypeError, ValueError):
+            pass
+        return ""
+
     lines = []
-    lines.append("## top_played_general [id,plays,secs,game,year,mfr,type]")
+    lines.append("## top_played_general [id,plays,secs,game,year,mfr,type,rating]")
     for row in played_history_general:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
-    lines.append("## top_played_em [id,plays,secs,game,year,mfr,type]")
+    lines.append("## top_played_em [id,plays,secs,game,year,mfr,type,rating]")
     for row in played_history_em:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
-    lines.append("## candidate_pool [id,game,year,mfr,type,updated_days_ago]")
+    lines.append("## candidate_pool [id,game,year,mfr,type,rating,updated_days_ago]")
     for row in available_catalog:
-        lines.append(f"{row.get('GameID', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{row.get('LastUpdatedDays', '')}")
+        lines.append(f"{row.get('GameID', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))},{row.get('LastUpdatedDays', '')}")
 
     payload = "\n".join(lines)
 
@@ -179,33 +195,72 @@ def fetch_recommendations(cabinet_data):
         json_keys_desc = "two keys"
 
     prompt = f"""
-    You are an expert Virtual Pinball recommendation engine running inside a physical arcade cabinet setup.
-    Your job is to look at the user's play history metrics and find relevant tables from the available candidate pool that they should play or explore next.
-    The play history is split into two sections: "top_played_general" for non-EM tables and "top_played_em" for EM (electromechanical) tables.
-    You must return separate sets of recommendations.
-
+    You are an expert Virtual Pinball recommendation engine.
+    Your objective is to analyze a user's play history and select the best matching games from an available "candidate_pool". 
     The data below uses a compact format:
-    - "top_played_general" rows are: id,plays,seconds,game,year,manufacturer,type (non-EM history)
-    - "top_played_em" rows are: id,plays,seconds,game,year,manufacturer,type (EM history)
-    - "candidate_pool" rows are: id,game,year,manufacturer,type,updated_days_ago
+    - "top_played_general" rows are: id,plays,seconds,game,year,manufacturer,type,rating (non-EM history)
+    - "top_played_em" rows are: id,plays,seconds,game,year,manufacturer,type,rating (EM history)
+    - "id" is the unique GameId from the database
+    - "plays" is the total number of play sessions in the last {HISTORY_DAYS} days
+    - "seconds" is the total time played in seconds in the last {HISTORY_DAYS} days
+    - "candidate_pool" rows are: id,game,year,manufacturer,type,rating,updated_days_ago
     - "id" is the unique GameId from the database
     - "updated_days_ago" is how many days ago the table file was last updated
+    - "rating" is the user's personal star rating for the table on a 1-5 scale where 5 is the highest (best) and 1 is the lowest (worst). An empty/missing rating value means unknown/unrated and should be treated as neutral (neither favored nor penalized).
 
+    ---
+    [INPUT DATA]
     {cabinet_data}
+    
+    ---
+    [ANALYSIS STEP]
+    Before selecting tables, analyze the play history in two separate tracks:
+    1. General History (top_played_general): Identify favorite eras (e.g., 90s DMD), manufacturers (e.g., Williams, Bally, Stern), and high-engagement tables.
+    2. EM History (top_played_em): Identify mechanical style preferences (e.g., Gottlieb 70s) and high-engagement tables.
+    
+    ---
+    [SCORING CRITERIA]
+    Rank candidate tables using the following scoring logic:
+    1. Core Match: High points for matching a manufacturer or era dominant in the user's top history.
+    2. Theme Alignment: Bonus points if the table's theme aligns with frequently played tables (e.g., if user plays a lot of space-themed tables, a new space-themed table gets a boost).
+    3. Freshness Boost: Add a moderate weight if "updated_days_ago" is less than 180.
+    4. Creator Boost: Add a moderate weight if the game name or metadata from online sources indicates it is by: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, or EMUnderdogs.
+    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as a strong signal of taste.
+       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns. Tables rated 4 are strong positives. Rating 3 is neutral. Ratings 1-2 are dislikes — however, don't overly penalize them because we don't know the reason - it could be a low quality version of an otherwise fantastic theme.
+       - In candidate_pool: strongly prefer candidates rated 4-5, give a small boost to 3, and penalize candidates rated 1-2 so they are only recommended if other signals are overwhelmingly strong.
+       - An empty/missing rating means unknown — treat as neutral; do not boost or penalize based on rating alone.
+    
+    ---
+    [CRITICAL CONSTRAINTS]
+    - Separated Output: "general" recommendations must NEVER have type 'EM'. "em" recommendations must ALWAYS have type 'EM'.
+    - Strict Counts: Output exactly {NUM_RECOMMENDATIONS} items for "general" and exactly {NUM_RECOMMENDATIONS_EM} items for "em".
+    - Exact Matching: The "id" and "game" string fields must perfectly match the database values provided in the candidate pool.
+    - Deduplication: Never recommend the same base game title twice. If a game has a standard version and a "(Videos)" version in the pool, prioritize the standard version and discard the "(Videos)" version. Do not output both.
+    - Candidate Isolation: Only recommend games that are explicitly listed in the "candidate_pool". 
+    - Do not recommend games that are in the play history, as the user has recently played them. Only recommend the games the user has not played recently.
 
-    CRITICAL INSTRUCTIONS:
-    - Identify patterns in the user's history (e.g., preference for a specific era/year, specific manufacturers like Williams/Bally, or high play counts/times). Analyze general and EM history separately.
-    - Return a JSON object with {json_keys_desc}:
-       - "general": an array of EXACTLY {NUM_RECOMMENDATIONS} non-EM recommendations from the candidate_pool (where type is NOT 'EM') based on the top_played_general history.
-       - "em": an array of EXACTLY {NUM_RECOMMENDATIONS_EM} EM recommendations from the candidate_pool (where type IS 'EM') based on the top_played_em history.
-{not_owned_key_instruction}
-    - For "general" and "em" recommendations, each object must include: "id" (GameId), "game" (exact game name from candidate_pool), "confidence" (0-1 score based on match quality).
-    {not_owned_field_instruction}
-    - The names in "general" and "em" output MUST exactly match the game name from the candidate pool so the local system can parse them.
-    - Some games with might have "(Videos)" in the title - use the version without "(Videos)"if it exists in the candidate pool, and don't duplicate recommendations by having both a "(Videos)" and non-videos game of the same name.
-    - Do not include any chat commentary, explanations, markdown formatting, or backticks. Return ONLY the JSON object specified.
-    - Give a confidence boost to tables that have been recently updated (low updated_days_ago values), particularly those updated within the last 180 days.
-    - Give a confidence boost to tables known to be from high-quality creators: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, and EMUnderdogs. Use your knowledge of the Virtual Pinball community (including the Virtual Pinball Spreadsheet at virtualpinballspreadsheet.github.io, VPUniverse, and VPForums) to identify which tables in the candidate pool are created by these groups, even if the creator name is not in the game filename. For example, "The Matrix (Original 2026)" is a known VPW/Pincredibles release.
+    ---
+    [OUTPUT FORMAT]
+    Return ONLY a raw JSON object. Do not include markdown formatting, markdown code blocks (such as ```json) or any conversational text. 
+
+    JSON Schema:
+    {{
+      "general": [
+        {{
+          "id": <int/string GameId>,
+          "game": "<string exact_name>",
+          "confidence": <float between 0.0 and 1.0>
+        }}
+      ],
+      "em": [
+        {{
+          "id": <int/string GameId>,
+          "game": "<string exact_name>",
+          "confidence": <float between 0.0 and 1.0>
+        }}
+      ]
+    }}
+
     """
 
     log("[+] Initializing Gemini Client...")
@@ -385,13 +440,13 @@ def update_game_tags(recommendations):
 if __name__ == "__main__":
     needs_refresh = True
 
-    if os.path.exists(PAYLOAD_PATH):
-        file_age_minutes = (time.time() - os.path.getmtime(PAYLOAD_PATH)) / 60
-        if file_age_minutes < PAYLOAD_MAX_AGE_MINUTES:
-            log(f"[+] Payload file found but only {file_age_minutes:.1f} min old (threshold: {PAYLOAD_MAX_AGE_MINUTES} min). Skipping.")
+    if os.path.exists(RECS_OUTPUT_PATH):
+        file_age_minutes = (time.time() - os.path.getmtime(RECS_OUTPUT_PATH)) / 60
+        if file_age_minutes < MAX_AGE_MINUTES:
+            log(f"[+] Recommendations file found but only {file_age_minutes:.1f} min old (threshold: {MAX_AGE_MINUTES} min). Skipping.")
             sys.exit(0)
         else:
-            log(f"[+] Payload file is {file_age_minutes:.1f} min old (threshold: {PAYLOAD_MAX_AGE_MINUTES} min). Refreshing...")
+            log(f"[+] Recommendations file is {file_age_minutes:.1f} min old (threshold: {MAX_AGE_MINUTES} min). Refreshing...")
             needs_refresh = True
 
     if needs_refresh:
