@@ -252,3 +252,29 @@ END;
 ```
 
 **Note: The TotalTimePlayedSecs and Flags are primarily there for debugging/validation.
+
+### Using GamesStats
+
+If you prefer to just use the existing GamesStats table and not create the CustomGameLog table, you can! In the Vpin_Recommender.py script, modify the history query (for non-EMs) to something like:
+
+```sql
+SELECT 
+	s.NumberPlays as TotalPlays,
+	s.TimePlayedSecs as TotalTimePlayedSecs,
+	CAST(JULIANDAY('now') - JULIANDAY(s.LastPlayed) AS INTEGER) AS LastPlayedDays,
+	g.GameId,
+	GameDisplay, 
+	GameYear, 
+	Manufact,
+	GameType,
+	GameRating
+FROM Games g
+JOIN GamesStats s on g.GameID = s.GameID
+WHERE g.EMUID in ({TARGET_EMU_IDS}) 
+and g.visible=1
+and s.LastPlayed > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
+and g.GameType IS NOT 'EM'
+ORDER BY TotalPlays DESC
+```
+
+...and repeat this for EMs, changing the GameType filter. The ability to customize is limited - there's no ability to horizon the data or get granular trends, which may be useful as the AI prompt matures.

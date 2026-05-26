@@ -82,7 +82,7 @@ WHERE g.EMUID in ({TARGET_EMU_IDS})
 GROUP BY cgl.GameID 
 HAVING TotalPlays > 1
 ORDER BY TotalPlays DESC
-LIMIT 60
+LIMIT 250
 """
 
 HISTORY_QUERY_EM = f"""
@@ -105,7 +105,7 @@ WHERE g.EMUID in ({TARGET_EMU_IDS})
 GROUP BY cgl.GameID 
 HAVING TotalPlays > 1
 ORDER BY TotalPlays DESC
-LIMIT 60
+LIMIT 250
 """
 
 LOCAL_CATALOG_QUERY = f"""
@@ -289,7 +289,7 @@ def fetch_recommendations(cabinet_data):
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.3,
+                temperature=0.4,
             ),
         )
         ai_elapsed = time.time() - ai_start
