@@ -13,7 +13,8 @@ An AI-powered virtual pinball table recommendation engine for PinUp Popper cabin
 
 ## Warning
 
-This is a prototype and requires manual setup and knowledge of Python and SQL. It is not an official product and is provided "as-is" without warranty. Use at your own risk, and always back up your `PUPDatabase.db` before making any changes.
+This is a prototype and requires manual setup and knowledge of Python and SQL. It is not an official product and is provided "as-is" without warranty. 
+Use at your own risk, and always back up your `PUPDatabase.db` before making any changes. If you aren't comfortable with any of this, please ask for help in the community. 
 
 ## Prerequisites
 
