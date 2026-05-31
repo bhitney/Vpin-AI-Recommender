@@ -278,4 +278,4 @@ and g.GameType IS NOT 'EM'
 ORDER BY TotalPlays DESC
 ```
 
-...and repeat this for EMs, changing the GameType filter. The ability to customize is limited - there's no ability to horizon the data or get granular trends, which may be useful as the AI prompt matures.
+...and repeat this for EMs, changing the GameType filter. The ability to customize is limited - there's no ability to horizon the data or get granular trends, which may be useful as the AI prompt matures. Ultimately, the goal will be to build a more robust prompt using the data; for that we'll need better analytics.
