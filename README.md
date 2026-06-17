@@ -1,6 +1,8 @@
 # Vpin Recommender
 
-An AI-powered virtual pinball table recommendation engine for PinUp Popper cabinets. Analyzes your play history and recommends tables from your local catalog (or the Virtual Pinball Spreadsheet) using Google Gemini.
+An AI-powered virtual pinball table recommendation engine for PinUp Popper cabinets. Analyzes your play history and recommends tables from your local catalog using Google Gemini.
+
+Note: This project is intended as a prototype, not as a fully baked solution. While Gemini is free in this context, it is somewhat slow -- best suited to be run as a background task.
 
 ## Features
 
@@ -135,9 +137,21 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 | `NUM_RECOMMENDATIONS_EM` | Number of EM recommendations |
 | `MIN_GAME_RATING` | Minimum rating filter (0 = no filter) |
 | `INCLUDE_NON_RATED` | Set to `1` to include unrated tables even when filtering by rating |
+| `MAX_AGE_MINUTES` | Minutes before a cached result expires and a new AI request is made |
 | `HISTORY_DAYS` | Days of play history to analyze |
+| `REPLAY_WINDOW_DAYS` | Games last played within this many days are excluded from recommendations |
 | `INCLUDE_NOT_OWNED` | `True` to include external table suggestions from the VPIN Spreadsheet |
 | `NUM_NOT_OWNED` | Number of external table suggestions (only used when `INCLUDE_NOT_OWNED` is `True`) |
+
+### Key Settings
+
+**`MAX_AGE_MINUTES`** — Controls how often the AI is actually called. If a cached `ai_recommendations.json` exists and is newer than this threshold, the script skips the AI request and reuses the previous results. Set this to `1440` (24 hours) to limit calls to once per day, which is a reasonable default if you run the script on startup or via Task Scheduler. Lower values refresh results more frequently at the cost of additional API usage.
+
+**`TARGET_EMU_IDS`** — A comma-separated string of emulator IDs from PinUp Popper (e.g., `"10"` or `"10,11"`). Only tables belonging to these emulators will be included in both the play history analysis and the recommendation candidate pool. You can find emulator IDs in the PinUp Popper Setup Utility under the emulator configuration. Use this to focus recommendations on specific emulators (e.g., VPX only) or broaden them across multiple.
+
+**`HISTORY_DAYS`** — The number of days of play history the AI uses to understand your preferences. A longer window (e.g., `365`) gives a broader picture of your overall taste, while a shorter window (e.g., `90`) makes the analysis more responsive to recent play patterns. Tune this based on how actively you play and how much your preferences shift over time.
+
+**`REPLAY_WINDOW_DAYS`** — Any game last played within this many days is excluded from recommendations, preventing the AI from suggesting tables you've recently played. For example, setting this to `90` keeps suggestions fresh by filtering out anything touched in the past three months. If you set this equal to `HISTORY_DAYS`, every game in the play history sample will be excluded, ensuring recommendations only surface tables you haven't played in a long time or haven't tried at all.
 
 ### Playlist setup
 
