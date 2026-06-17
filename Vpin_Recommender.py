@@ -19,11 +19,11 @@ PROMPT_PATH = os.path.join(SCRIPT_DIR, "ai_prompt_full.txt")
 RECS_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "ai_recommendations.json")
 
 # Minimum age (in minutes) before re-generating recommendations
-MAX_AGE_MINUTES = 1
+MAX_AGE_MINUTES = 5
 
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
-TARGET_EMU_IDS = "10" # add whaevever EMUIDs to include in analysis
+TARGET_EMU_IDS = "1,2,3" # add whaevever EMUIDs to include in analysis
 
 # Update a PinUp Popper playlist with recommended games?
 UPDATE_PLAYLIST = True
