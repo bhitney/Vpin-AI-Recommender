@@ -1,5 +1,7 @@
 annotated-types==0.7.0
 anyio==4.13.0
+azure-core==1.35.1
+azure-identity==1.26.0
 certifi==2026.5.20
 cffi==2.0.0
 charset-normalizer==3.4.7
@@ -11,6 +13,7 @@ h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
 idna==3.16
+openai==2.54.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
 pycparser==3.0

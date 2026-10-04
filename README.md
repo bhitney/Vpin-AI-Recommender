@@ -1,11 +1,12 @@
 # Vpin Recommender
 
-An AI-powered virtual pinball table recommendation engine for PinUp Popper cabinets. Analyzes your play history and recommends tables from your local catalog using Google Gemini.
+An AI-powered virtual pinball table recommendation engine for PinUp Popper cabinets. Analyzes your play history and recommends tables from your local catalog using an AI model — either **Azure AI Foundry** (default, fast) or **Google Gemini** (free, slower).
 
-Note: This project is intended as a prototype, not as a fully baked solution. While Gemini is free in this context, it is somewhat slow -- best suited to be run as a background task.
+Note: This project is intended as a prototype, not as a fully baked solution. It supports two interchangeable AI backends with automatic fallback: Azure AI Foundry (recommended for speed/quality) and Google Gemini (free, but somewhat slow — best suited to be run as a background task).
 
 ## Features
 
+- Supports two AI backends: **Azure AI Foundry** (gpt-5 by default) and **Google Gemini**, selectable via `AI_PROVIDER` with automatic fallback
 - Analyzes play history separately for **General** (non-EM) and **EM** (electromechanical) tables
 - Returns two distinct recommendation sets tailored to each category
 - Weights recommendations toward recently updated tables and known high-quality creators (configurable - you can adjust the weights in the script)
@@ -18,11 +19,35 @@ Note: This project is intended as a prototype, not as a fully baked solution. Wh
 This is a prototype and requires manual setup and knowledge of Python and SQL. It is not an official product and is provided "as-is" without warranty. 
 Use at your own risk, and always back up your `PUPDatabase.db` before making any changes. If you aren't comfortable with any of this, please ask for help in the community. 
 
+## Quick start (Azure, single PC)
+
+If you just want to try it on **one Windows PC** using Azure AI Foundry (the default backend), this is the short version. Every step is explained in more detail further down, and there's a [Troubleshooting](#troubleshooting) section at the end.
+
+1. **Install the tools** (one time): [Python 3.10+](https://www.python.org/downloads/) and the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli). In the Python installer, tick **"Add python.exe to PATH."**
+2. **Get the code**, then open a terminal (Command Prompt) in the project folder.
+3. **Create the Python environment:**
+   ```cmd
+   py -m venv .venv
+   .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+4. **Sign in to Azure** (opens a browser once): `az login`
+5. **Make sure you have a model deployed** in Azure AI Foundry and that `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT` near the top of `Vpin_Recommender.py` match it — see [Azure AI Foundry setup](#azure-ai-foundry-setup).
+6. **Point the script at your cabinet:** edit `DB_PATH`, `TARGET_EMU_IDS`, and `RECS_PLAYLIST_ID` near the top of `Vpin_Recommender.py` — see [Configuration](#configuration).
+7. **Back up `PUPDatabase.db`**, then run:
+   ```cmd
+   python Vpin_Recommender.py
+   ```
+
+For a cabinet with **no keyboard/mouse**, see [Headless / unattended deployment](#headless--unattended-deployment).
+
 ## Prerequisites
 
 - Python 3.10+
 - A PinUp Popper installation with `PUPDatabase.db`
-- A [Google Gemini API key](https://aistudio.google.com/apikey)
+- **One AI backend:**
+  - **Azure AI Foundry** (default): an Azure subscription with a deployed chat model and the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login`). No API key is stored — authentication is keyless via your Entra ID identity. See [Azure AI Foundry setup](#azure-ai-foundry-setup).
+  - **Google Gemini** (alternative): a [Google Gemini API key](https://aistudio.google.com/apikey).
 - The `CustomGameLog` table and triggers must be set up in your `PUPDatabase.db` — see [CustomGameLog creation](#customgamelog-creation) below
 
 
@@ -65,7 +90,25 @@ py -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 5. Configure your API key
+### 5. Choose your AI backend
+
+The script supports two interchangeable AI backends, selected with the `AI_PROVIDER` environment variable (default: `azure`):
+
+| `AI_PROVIDER` | Backend | Auth |
+|---------------|---------|------|
+| `azure` (default) | Azure AI Foundry (gpt-5) | Keyless, via Azure CLI / Entra ID |
+| `gemini` | Google Gemini | `GEMINI_API_KEY` |
+
+If the primary provider fails (auth, quota, network, or bad JSON), the script automatically falls back to the other provider. Disable this by setting `AI_FALLBACK = False` near the top of `Vpin_Recommender.py`.
+
+- For **Azure**, follow [Azure AI Foundry setup](#azure-ai-foundry-setup) below.
+- For **Gemini**, follow [Configure your Gemini API key](#configure-your-gemini-api-key) below.
+
+> **Most testers should keep the default (`azure`) and jump straight to [Azure AI Foundry setup](#azure-ai-foundry-setup).** The Gemini section immediately below is optional — skip it unless you specifically want to use Google Gemini.
+
+### Configure your Gemini API key
+
+> Only needed if you use `AI_PROVIDER=gemini` (or want Gemini as a fallback).
 
 The script reads `GEMINI_API_KEY` from an environment variable. **Do not hard-code your key in the script or commit it to source control.**
 
@@ -122,12 +165,184 @@ import keyring
 GEMINI_API_KEY = keyring.get_password("vpin_recommender", "gemini_api_key")
 ```
 
+## Azure AI Foundry setup
+
+> Only needed if you use `AI_PROVIDER=azure` (the default).
+
+Azure AI Foundry gives faster, higher-quality recommendations than the free Gemini tier. Authentication is **keyless** — the script uses your Azure CLI / Entra ID identity via `DefaultAzureCredential`, so there is no API key to store or leak. (Many Azure tenants disable local API-key auth by policy, which is why keyless is the default.)
+
+### 1. Sign in with the Azure CLI
+
+Install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), then:
+
+```powershell
+az login
+az account set --subscription "<your-subscription-id-or-name>"
+```
+
+### 2. Deploy a model (one-time)
+
+If you don't already have a Foundry (Azure AI Services) resource and a chat deployment, create them. Example using the CLI (adjust names/region/quota to taste):
+
+```powershell
+# Create a resource group and an Azure AI Services (Foundry) resource
+az group create -n vpin-ai-rg -l centralus
+az cognitiveservices account create -n my-foundry -g vpin-ai-rg -l centralus `
+  --kind AIServices --sku S0 --custom-domain my-foundry --yes
+
+# Deploy a chat model (gpt-5 is the project default; gpt-4.1 is a faster alternative)
+# The deployment name here must match AZURE_OPENAI_DEPLOYMENT in the script.
+az cognitiveservices account deployment create -n my-foundry -g vpin-ai-rg `
+  --deployment-name vpin-recommender-gpt5 `
+  --model-name gpt-5 --model-version "2025-08-07" --model-format OpenAI `
+  --sku-name GlobalStandard --sku-capacity 50
+
+# Get the endpoint
+az cognitiveservices account show -n my-foundry -g vpin-ai-rg --query "properties.endpoint" -o tsv
+```
+
+You can also create the resource and deployment interactively in the [Azure AI Foundry portal](https://ai.azure.com).
+
+> **Which model should I deploy?** This project defaults to **`gpt-5`**, a reasoning model with excellent ranking/deduplication and broad knowledge of pinball tables and creators. It's slower (roughly 30–60s per run) but that's fine for a background job. For a faster, cheaper option, **`gpt-4.1`** is a strong alternative — set `AZURE_OPENAI_DEPLOYMENT` to your gpt-4.1 deployment and `AZURE_OPENAI_TEMPERATURE=0.4`. Reasoning models (gpt-5, o-series) only accept the default temperature, so leave `AZURE_OPENAI_TEMPERATURE=None` for them (the script also auto-retries without temperature if a model rejects it). You can compare any models side-by-side on your real prompt (`ai_prompt_full.txt`) in the Foundry **Compare** view. In practice, the biggest quality gains come from richer play-history data (see [CustomGameLog creation](#customgamelog-creation)), not just a bigger model.
+
+Example: deploy gpt-5 with the CLI (adjust names/region/quota):
+
+```powershell
+az cognitiveservices account deployment create -n my-foundry -g my-rg `
+  --deployment-name vpin-recommender --model-name gpt-5 --model-version "2025-08-07" `
+  --model-format OpenAI --sku-name GlobalStandard --sku-capacity 50
+```
+
+### 3. Grant yourself access
+
+Your identity needs the **Cognitive Services OpenAI User** role on the resource:
+
+```powershell
+$uid = az ad signed-in-user show --query id -o tsv
+$scope = az cognitiveservices account show -n my-foundry -g vpin-ai-rg --query id -o tsv
+az role assignment create --assignee $uid --role "Cognitive Services OpenAI User" --scope $scope
+```
+
+### 4. Point the script at your deployment
+
+Set these at the top of `Vpin_Recommender.py` (or override via environment variables):
+
+| Variable | Env var | Description |
+|----------|---------|-------------|
+| `AZURE_OPENAI_ENDPOINT` | `AZURE_OPENAI_ENDPOINT` | e.g. `https://my-foundry.cognitiveservices.azure.com/` |
+| `AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_DEPLOYMENT` | The deployment name, e.g. `vpin-recommender` |
+| `AZURE_OPENAI_API_VERSION` | `AZURE_OPENAI_API_VERSION` | API version, e.g. `2024-10-21` |
+
+Then run normally — no key needed, as long as `az login` is valid.
+
+### Headless / unattended deployment
+
+On a cabinet PC with no interactive user, **do not rely on `az login`** — its refresh token expires after ~90 days of inactivity (and breaks on password changes or Conditional Access prompts) with no one at the keyboard to fix it. Instead, use a **service principal**, which authenticates non-interactively and is picked up automatically by `DefaultAzureCredential` via three environment variables.
+
+> The script's credential chain is `AzureCliCredential` → `DefaultAzureCredential`. The latter reads the `AZURE_*` variables below, so **no code changes are needed** — just set them.
+
+**1. Create a service principal and grant it access** (run once, from an admin machine):
+
+```powershell
+$scope = az cognitiveservices account show -n my-foundry -g my-rg --query id -o tsv
+az ad sp create-for-rbac --name "vpin-recommender-sp" `
+  --role "Cognitive Services OpenAI User" --scopes $scope
+```
+
+This prints `appId`, `password`, and `tenant`. **Copy the password now — it is shown only once.**
+
+**2. Put the credentials in `.env` on the cabinet** (gitignored, never committed):
+
+```
+AZURE_TENANT_ID=<tenant>
+AZURE_CLIENT_ID=<appId>
+AZURE_CLIENT_SECRET=<password>
+```
+
+`run.bat` loads every `KEY=VALUE` line from `.env` into the environment before launching the script, so the service principal is used automatically.
+
+**3. Deployment checklist for the cabinet:**
+
+| Step | Detail |
+|------|--------|
+| Copy files | Copy the repo **without** `.venv` (virtual environments are not portable) |
+| Python | Install Python 3.10+ |
+| venv + deps | `py -m venv .venv` then `pip install -r requirements.txt` |
+| Auth | Service principal via `.env` (above) — preferred over `az login` for headless |
+| Config | Set real `DB_PATH`, `TARGET_EMU_IDS`, `RECS_PLAYLIST_ID`; keep `AI_PROVIDER=azure` |
+| Network | Allow outbound HTTPS to `*.cognitiveservices.azure.com`; keep the system clock synced (token validation fails on clock skew) |
+| Schedule | Add `run.bat` to Task Scheduler or the Startup folder |
+
+> **Secret rotation:** the client secret has an expiry (2 years in the example). Rotate before it lapses with `az ad app credential reset --id <appId>` and update `.env`.
+
+## Security & authentication notes
+
+### How authentication works
+
+A **service principal** is a non-human identity in Microsoft Entra ID — effectively a login for this script rather than for a person. It has an `appId` (like a username), a `client secret` (like a password), and a set of role assignments.
+
+At runtime the flow is:
+
+1. `run.bat` loads `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` from `.env` into environment variables.
+2. The script's `DefaultAzureCredential` detects those variables and exchanges them with Entra ID for a **short-lived bearer token** (valid ~1 hour).
+3. The token is sent to the Azure AI Foundry endpoint; Azure checks the service principal's **role assignment** and allows the call.
+
+No interactive login, no browser, and no long-lived API key are involved — which is what makes it suitable for an unattended cabinet. On your own dev machine, the script instead uses your `az login` session (via the same credential chain), so no `.env` secret is needed there.
+
+### Why a service principal here
+
+| Option | Best for | Why / why not |
+|--------|----------|---------------|
+| **Managed identity** | Azure-hosted compute (VM, App Service, Arc) | The gold standard — *no secret at all* — but requires Azure-managed hardware. A home cabinet doesn't qualify unless Arc-enrolled. |
+| **Service principal** *(used here)* | Off-Azure unattended machines | Correct, conventional choice for a physical cabinet. One secret to manage. |
+| **User `az login`** | Your interactive dev machine | Interactive and the token expires after ~90 days idle — unsuitable for headless. |
+| **API keys** | — | Blocked by tenant policy here, and a long-lived shared secret is the weakest option. |
+
+### Security considerations
+
+- **The client secret is a password.** `.env` is gitignored — never commit it, and never paste it into logs, screenshots, or chat.
+- **Least privilege (already applied).** The service principal is scoped to a *single* Foundry resource with a *data-plane* role (**Cognitive Services OpenAI User**). It can call the model but cannot manage Azure resources or reach other services. If leaked, the blast radius is "someone can use that one deployment's quota," not your whole subscription.
+- **One service principal per tester.** If everyone shares one secret, a single leak forces a rotation for all. Having each tester run `az ad sp create-for-rbac` for themselves means you can revoke one without affecting others.
+- **Rotation & revocation.** Rotate the secret before expiry (and immediately if exposed) with `az ad app credential reset --id <appId>`. You can disable or delete the service principal in Entra ID to cut off access instantly; its sign-ins are logged per `appId`.
+- **Secret at rest.** Plaintext `.env` is acceptable for a home cabinet. To harden, use Windows Credential Manager/DPAPI or a certificate credential instead of a shared secret.
+
+### Can model-side instructions protect the credential? (No — and what does)
+
+A natural instinct is to "restrict the model on the Foundry side to only answer this query." That improves output quality but is **not** a security control against a stolen credential: the system prompt is supplied *by the caller on every request*, so anyone holding the secret just sends their own prompt and ignores yours.
+
+What actually limits damage from a leaked credential — all enforced server-side, for every caller:
+
+- **Quota caps** on the deployment (TPM/RPM) bound the cost and throughput an attacker could consume.
+- **Content filter (RAI) policy** (a default policy is already attached) runs on Azure's side for every call; you can attach a stricter custom policy.
+- **Network restrictions** — lock the resource to specific IPs or a private endpoint. For a cabinet with a stable IP, an allow-list makes a stolen key unusable from anywhere else. This is the strongest single control.
+- **Scope, rotation, and revocation**, as above.
+
+Model instructions *do* matter for a **different** threat — **prompt injection through your own data.** Table names and metadata are embedded in the prompt, so a maliciously named table could try to steer the output. The firm JSON-only system prompt plus the script's output validation (it only acts on game IDs that exist in your candidate pool, never on free text from the model) defend against that.
+
+### Future option: enforce "only pinball queries" server-side
+
+This script calls the **raw model deployment** directly, which means the "you are a pinball recommender" instruction lives only in this client. Anyone with a valid credential can bypass the script and ask the deployment arbitrary questions. Content filters do **not** fix this — they block harmful *categories*, not off-topic questions.
+
+To truly constrain *what can be asked* regardless of caller, don't expose the raw deployment. Front it with a layer that owns the system prompt and input shape, and grant the credential access only to that layer:
+
+- A **Foundry Agent** or **Prompt Flow** endpoint with a fixed, server-side system prompt, or
+- A small **Azure Function / API** that injects the prompt, accepts only the play-data payload, and returns only the structured JSON.
+
+Then lock the underlying model deployment to be callable only by that layer's identity. This is architectural enforcement, not a deployment toggle. It's unnecessary for a single-user cabinet test (exposure is already bounded by quota, least-privilege scope, and revocation) but is the right move if this graduates to wider or production use.
+
 ## Configuration
 
 Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 
 | Variable | Description |
 |----------|-------------|
+| `AI_PROVIDER` | Primary AI backend: `azure` (default) or `gemini`. Also settable via env var. |
+| `AI_FALLBACK` | `True` to automatically try the other provider if the primary fails |
+| `AZURE_OPENAI_ENDPOINT` | Azure AI Foundry endpoint URL (used when provider is `azure`) |
+| `AZURE_OPENAI_DEPLOYMENT` | Azure model deployment name |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI API version |
+| `AZURE_OPENAI_TEMPERATURE` | Sampling temperature. Use `None` for reasoning models (gpt-5, o-series); `0.4` works for gpt-4.1. The script auto-retries without it if the model objects. |
+| `GEMINI_MODEL` | Gemini model name (used when provider is `gemini`) |
 | `DB_PATH` | Path to your `PUPDatabase.db` |
 | `TARGET_EMU_IDS` | Comma-separated emulator IDs to include (see below) |
 | `UPDATE_PLAYLIST` | `True` to update a PinUp Popper playlist with recommendations |
@@ -177,7 +392,7 @@ Double-click `run.bat` or add it to Windows Task Scheduler / Startup folder for 
 run.bat
 ```
 
-This batch file automatically loads your API key from `.env`, activates the venv, and runs the script.
+This batch file automatically loads your credentials from `.env` (service principal and/or `GEMINI_API_KEY`), activates the venv, and runs the script.
 
 ### Run on Windows startup
 
@@ -195,10 +410,27 @@ python Vpin_Recommender.py
 
 The script will:
 1. Extract play history and candidate pool from your database
-2. Send the data to Google Gemini for AI-powered recommendations
+2. Send the data to the configured AI backend (Azure AI Foundry or Google Gemini) for AI-powered recommendations
 3. Save results to `ai_recommendations.json`
 4. Update the specified PinUp Popper playlist (if `UPDATE_PLAYLIST` is `True`)
 5. Tag recommended games with `AI_Suggested` (if `ADD_SUGGESTED_TAGS` is `True`)
+
+## Troubleshooting
+
+Common issues testers hit, and how to fix them:
+
+| Symptom | Likely cause & fix |
+|---------|--------------------|
+| `'python' is not recognized` / `'py' is not recognized` | Python isn't on your PATH. Reinstall Python and tick **"Add python.exe to PATH,"** then open a new terminal. |
+| `ModuleNotFoundError: No module named 'openai'` (or `azure`, `google`) | The virtual environment isn't active or dependencies aren't installed. Run `.venv\Scripts\activate` then `pip install -r requirements.txt`. |
+| `DefaultAzureCredential failed to retrieve a token` | You're not signed in to Azure on this machine. Run `az login`. On a headless cabinet, set up the service principal `.env` — see [Headless / unattended deployment](#headless--unattended-deployment). |
+| `... (403) ... PermissionDenied` or `Access denied` | Your identity (or service principal) lacks the **Cognitive Services OpenAI User** role on the Foundry resource. See [Azure AI Foundry setup](#azure-ai-foundry-setup), step 3. |
+| `(404) ... DeploymentNotFound` | `AZURE_OPENAI_DEPLOYMENT` or `AZURE_OPENAI_ENDPOINT` don't match your actual Foundry deployment. Double-check both near the top of `Vpin_Recommender.py`. |
+| `GEMINI_API_KEY environment variable is not set` | Only relevant if you chose the Gemini backend (or fallback tried it). Either set the key or set `AI_PROVIDER=azure`. |
+| `(401) ... invalid_client` or `AADSTS7000215` | The service principal secret in `.env` is wrong or expired. Regenerate it with `az ad app credential reset --id <appId>` and update `.env`. |
+| `database is locked` | PinUp Popper (or another tool) has `PUPDatabase.db` open. Close it and re-run. Always back up the database first. |
+| "Recommendations file ... Skipping." | A fresh `ai_recommendations.json` already exists. This is normal caching — lower `MAX_AGE_MINUTES` or delete that file to force a new run. |
+| No recommendations / empty results | `TARGET_EMU_IDS` probably doesn't match your emulators, or there isn't enough play history yet. See [Emulator IDs](#emulator-ids) and [CustomGameLog creation](#customgamelog-creation). |
 
 ## Files
 
@@ -208,7 +440,7 @@ The script will:
 | `requirements.txt` | Python dependencies |
 | `ai_prompt_payload_compact.txt` | Generated payload sent to AI (auto-created) |
 | `ai_recommendations.json` | AI output (auto-created) |
-| `.env` | Your API key (create manually, do not commit) |
+| `.env` | Your credentials — service principal and/or `GEMINI_API_KEY` (create manually, do not commit) |
 
 ## .gitignore recommendations
 

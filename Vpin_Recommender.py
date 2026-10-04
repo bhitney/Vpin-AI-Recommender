@@ -5,10 +5,11 @@ import json
 import time
 from datetime import datetime
 # from groq import Groq
-from google import genai
-from google.genai import types
-
-# py -m pip install google-genai
+#
+# Provider SDKs are imported lazily inside their helper functions so that you
+# only need the package for the provider you actually use:
+#   Azure AI Foundry:  pip install openai azure-identity
+#   Google Gemini:     pip install google-genai
 
 # ==============================================================================
 # CONFIGURABLE PARAMETERS & PATHS
@@ -19,7 +20,7 @@ PROMPT_PATH = os.path.join(SCRIPT_DIR, "ai_prompt_full.txt")
 RECS_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "ai_recommendations.json")
 
 # Minimum age (in minutes) before re-generating recommendations
-MAX_AGE_MINUTES = 5
+MAX_AGE_MINUTES = 1440
 
 # PinUp Popper System Settings
 DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
@@ -58,6 +59,40 @@ NUM_NOT_OWNED = 5
 # Pull the API key from the environment
 # GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+# ==============================================================================
+# AI PROVIDER SETTINGS
+# ==============================================================================
+# Primary AI backend to use: "azure" (Azure AI Foundry) or "gemini" (Google).
+# Override at runtime with the AI_PROVIDER environment variable.
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "azure").strip().lower()
+
+# If the primary provider fails (auth, quota, network, bad JSON), automatically
+# fall back to the other provider. Set to False to disable fallback.
+AI_FALLBACK = True
+
+# --- Azure AI Foundry (keyless Entra ID auth; run `az login` first) ---
+# The resource has local API-key auth disabled by org policy, so authentication
+# uses your Azure CLI / Entra ID identity via DefaultAzureCredential.
+AZURE_OPENAI_ENDPOINT = os.environ.get(
+    "AZURE_OPENAI_ENDPOINT", "https://opsiq-foundry.cognitiveservices.azure.com/")
+AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "vpin-recommender-gpt5")
+AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+# Sampling temperature for the Azure model. Reasoning models (gpt-5, o-series)
+# only accept the default and reject a custom value — set this to None for them.
+# Non-reasoning models (e.g. gpt-4.1) work well around 0.4. If a model rejects
+# the configured temperature, the script automatically retries without it.
+_azure_temp_env = os.environ.get("AZURE_OPENAI_TEMPERATURE")
+if _azure_temp_env is None:
+    AZURE_OPENAI_TEMPERATURE = None  # default suits the gpt-5 deployment above
+elif _azure_temp_env.strip().lower() in ("", "none"):
+    AZURE_OPENAI_TEMPERATURE = None
+else:
+    AZURE_OPENAI_TEMPERATURE = float(_azure_temp_env)
+
+# --- Google Gemini ---
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # ==============================================================================
 # SQL QUERIES
@@ -179,13 +214,121 @@ def extract_data():
     return payload
 
 # ==============================================================================
+# AI PROVIDER BACKENDS
+# ==============================================================================
+def _call_azure(prompt):
+    """Call Azure AI Foundry via keyless Entra ID auth. Returns (text, usage_str)."""
+    from azure.identity import (
+        AzureCliCredential,
+        DefaultAzureCredential,
+        ChainedTokenCredential,
+        get_bearer_token_provider,
+    )
+    from openai import AzureOpenAI
+
+    log(f"[+] Initializing Azure AI Foundry client (deployment: {AZURE_OPENAI_DEPLOYMENT})...")
+    # Prefer the Azure CLI identity (run `az login`), then fall back to the
+    # broader DefaultAzureCredential chain (managed identity, env vars, etc.).
+    credential = ChainedTokenCredential(AzureCliCredential(), DefaultAzureCredential())
+    token_provider = get_bearer_token_provider(
+        credential, "https://cognitiveservices.azure.com/.default")
+    client = AzureOpenAI(
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        azure_ad_token_provider=token_provider,
+        api_version=AZURE_OPENAI_API_VERSION,
+    )
+    request_kwargs = dict(
+        model=AZURE_OPENAI_DEPLOYMENT,
+        messages=[
+            {"role": "system", "content": "You are a JSON-only response bot. Return only a single valid JSON object with no markdown or commentary."},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+    )
+    if AZURE_OPENAI_TEMPERATURE is not None:
+        request_kwargs["temperature"] = AZURE_OPENAI_TEMPERATURE
+
+    try:
+        response = client.chat.completions.create(**request_kwargs)
+    except Exception as e:
+        # Reasoning models (gpt-5, o-series) reject a custom temperature.
+        # Self-heal by retrying once without it so swapping models "just works".
+        if "temperature" in request_kwargs and "temperature" in str(e).lower():
+            log("[*] Model rejected the configured temperature; retrying without it "
+                "(set AZURE_OPENAI_TEMPERATURE=None to silence this).")
+            request_kwargs.pop("temperature", None)
+            response = client.chat.completions.create(**request_kwargs)
+        else:
+            raise
+    text = response.choices[0].message.content.strip()
+    usage = getattr(response, "usage", None)
+    usage_str = None
+    if usage:
+        usage_str = f"prompt: {usage.prompt_tokens}, response: {usage.completion_tokens}, total: {usage.total_tokens}"
+    return text, usage_str
+
+
+def _call_gemini(prompt):
+    """Call Google Gemini. Returns (text, usage_str)."""
+    from google import genai
+    from google.genai import types
+
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
+    log(f"[+] Initializing Gemini client (model: {GEMINI_MODEL})...")
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.4,
+        ),
+    )
+    text = response.text.strip()
+    usage = getattr(response, "usage_metadata", None)
+    usage_str = None
+    if usage:
+        usage_str = f"prompt: {usage.prompt_token_count}, response: {usage.candidates_token_count}, total: {usage.total_token_count}"
+    return text, usage_str
+
+
+_PROVIDERS = {"azure": _call_azure, "gemini": _call_gemini}
+
+
+def _generate_with_provider(prompt):
+    """Dispatch the prompt to the configured provider, with optional fallback.
+
+    Returns (raw_text, provider_name). Raises if every attempted provider fails.
+    """
+    primary = AI_PROVIDER if AI_PROVIDER in _PROVIDERS else "azure"
+    order = [primary]
+    if AI_FALLBACK:
+        order += [name for name in _PROVIDERS if name != primary]
+
+    last_err = None
+    for name in order:
+        try:
+            log(f"[+] Querying AI engine '{name}' for recommendations...")
+            ai_start = time.time()
+            text, usage_str = _PROVIDERS[name](prompt)
+            ai_elapsed = time.time() - ai_start
+            if usage_str:
+                log(f"[+] Tokens — {usage_str}")
+            log(f"[+] AI generation ({name}) completed in {ai_elapsed:.1f}s")
+            return text, name
+        except Exception as e:
+            last_err = e
+            log(f"[-] Provider '{name}' failed: {e}")
+            if name != order[-1]:
+                log("[+] Attempting fallback provider...")
+    raise RuntimeError(f"All AI providers failed. Last error: {last_err}")
+
+
+# ==============================================================================
 # AI GENERATION STEP
 # ==============================================================================
 def fetch_recommendations(cabinet_data):
-    if not GEMINI_API_KEY:
-        log("[-] Error: GEMINI_API_KEY environment variable is not set.")
-        print("    Please set it before running. Example: set GEMINI_API_KEY=your_key")
-        sys.exit(1)
     # if not GROQ_API_KEY:
     #     log("[-] Error: GROQ_API_KEY environment variable is not set.")
     #     print("    Please set it before running. Example: set GROQ_API_KEY=your_key")
@@ -271,54 +414,21 @@ def fetch_recommendations(cabinet_data):
 
     """
 
-    log("[+] Initializing Gemini Client...")
+    log("[+] Preparing AI request...")
 
     with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
         f.write(prompt)
     log(f"[+] Saved full AI prompt to: {PROMPT_PATH}")
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    # log("[+] Initializing Groq Client...")
-    # client = Groq(api_key=GROQ_API_KEY)
-
     try:
-        log("[+] Querying AI engine for recommendations...")
-        ai_start = time.time()
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.4,
-            ),
-        )
-        ai_elapsed = time.time() - ai_start
-
-        recommendations = json.loads(response.text.strip())
-
-        # Log token usage if available
-        usage = getattr(response, 'usage_metadata', None)
-        if usage:
-            log(f"[+] Tokens — prompt: {usage.prompt_token_count}, response: {usage.candidates_token_count}, total: {usage.total_token_count}")
-
-        # --- Groq alternative ---
-        # response = client.chat.completions.create(
-        #     model="llama-3.3-70b-versatile",
-        #     messages=[
-        #         {"role": "system", "content": "You are a JSON-only response bot. Return only valid JSON arrays with no markdown or commentary."},
-        #         {"role": "user", "content": prompt}
-        #     ],
-        #     temperature=0.3,
-        #     response_format={"type": "json_object"},
-        # )
-        # recommendations = json.loads(response.choices[0].message.content.strip())
+        raw_text, provider_used = _generate_with_provider(prompt)
+        recommendations = json.loads(raw_text)
 
         with open(RECS_OUTPUT_PATH, 'w', encoding='utf-8') as f:
             json.dump(recommendations, f, indent=4)
 
-        log(f"[+] AI generation completed in {ai_elapsed:.1f}s")
         print("\n==================================================")
-        print(f" SUCCESS: Generated recommendations")
+        print(f" SUCCESS: Generated recommendations via '{provider_used}'")
         print("==================================================")
         general_recs = recommendations.get("general", [])
         em_recs = recommendations.get("em", [])
