@@ -32,8 +32,8 @@ If you just want to try it on **one Windows PC** using Azure AI Foundry (the def
    pip install -r requirements.txt
    ```
 4. **Sign in to Azure** (opens a browser once): `az login`
-5. **Make sure you have a model deployed** in Azure AI Foundry and that `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT` near the top of `Vpin_Recommender.py` match it — see [Azure AI Foundry setup](#azure-ai-foundry-setup).
-6. **Point the script at your cabinet:** edit `DB_PATH`, `TARGET_EMU_IDS`, and `RECS_PLAYLIST_ID` near the top of `Vpin_Recommender.py` — see [Configuration](#configuration).
+5. **Make sure you have a model deployed** in Azure AI Foundry and that `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT` in `vpin_recommender_config.py` match it — see [Azure AI Foundry setup](#azure-ai-foundry-setup).
+6. **Point the script at your cabinet:** edit `DB_PATH`, `TARGET_EMU_IDS`, and `RECS_PLAYLIST_ID` in `vpin_recommender_config.py` — see [Configuration](#configuration).
 7. **Back up `PUPDatabase.db`**, then run:
    ```cmd
    python Vpin_Recommender.py
@@ -99,7 +99,7 @@ The script supports two interchangeable AI backends, selected with the `AI_PROVI
 | `azure` (default) | Azure AI Foundry (gpt-5) | Keyless, via Azure CLI / Entra ID |
 | `gemini` | Google Gemini | `GEMINI_API_KEY` |
 
-If the primary provider fails (auth, quota, network, or bad JSON), the script automatically falls back to the other provider. Disable this by setting `AI_FALLBACK = False` near the top of `Vpin_Recommender.py`.
+If the primary provider fails (auth, quota, network, or bad JSON), the script automatically falls back to the other provider. Disable this by setting `AI_FALLBACK = False` in `vpin_recommender_config.py`.
 
 - For **Azure**, follow [Azure AI Foundry setup](#azure-ai-foundry-setup) below.
 - For **Gemini**, follow [Configure your Gemini API key](#configure-your-gemini-api-key) below.
@@ -191,7 +191,7 @@ az cognitiveservices account create -n my-foundry -g vpin-ai-rg -l centralus `
   --kind AIServices --sku S0 --custom-domain my-foundry --yes
 
 # Deploy a chat model (gpt-5 is the project default; gpt-4.1 is a faster alternative)
-# The deployment name here must match AZURE_OPENAI_DEPLOYMENT in the script.
+# The deployment name here must match AZURE_OPENAI_DEPLOYMENT in vpin_recommender_config.py.
 az cognitiveservices account deployment create -n my-foundry -g vpin-ai-rg `
   --deployment-name vpin-recommender-gpt5 `
   --model-name gpt-5 --model-version "2025-08-07" --model-format OpenAI `
@@ -225,7 +225,7 @@ az role assignment create --assignee $uid --role "Cognitive Services OpenAI User
 
 ### 4. Point the script at your deployment
 
-Set these at the top of `Vpin_Recommender.py` (or override via environment variables):
+Set these in `vpin_recommender_config.py` (or override via environment variables):
 
 | Variable | Env var | Description |
 |----------|---------|-------------|
@@ -332,7 +332,7 @@ Then lock the underlying model deployment to be callable only by that layer's id
 
 ## Configuration
 
-Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
+Edit the settings in `vpin_recommender_config.py` to match your setup:
 
 | Variable | Description |
 |----------|-------------|
@@ -355,6 +355,7 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 | `MAX_AGE_MINUTES` | Minutes before a cached result expires and a new AI request is made |
 | `HISTORY_DAYS` | Days of play history to analyze |
 | `REPLAY_WINDOW_DAYS` | Games last played within this many days are excluded from recommendations |
+| `RATING_INFLUENCE` | How strongly your personal star ratings drive picks: `none`, `light`, `moderate` (default), or `strong` |
 | `INCLUDE_NOT_OWNED` | `True` to include external table suggestions from the VPIN Spreadsheet |
 | `NUM_NOT_OWNED` | Number of external table suggestions (only used when `INCLUDE_NOT_OWNED` is `True`) |
 
@@ -370,7 +371,7 @@ Edit the constants at the top of `Vpin_Recommender.py` to match your setup:
 
 ### Playlist setup
 
-A dedicated playlist is only required if `UPDATE_PLAYLIST` is set to `True`. In that case, you can use an existing playlist or create a new one (the games in the playlist are overwritten each refresh). To find the playlist ID, open the **PinUp Popper Setup Utility**, navigate to your playlists, and note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in the script to that value.
+note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in `vpin_recommender_config.py` to that value.
 
 Alternatively, if `ADD_SUGGESTED_TAGS` is `True`, recommended games are tagged with `AI_Suggested` and you can build a dynamic playlist using a SQL query of your choice, for example:
 
@@ -440,7 +441,7 @@ Common issues testers hit, and how to fix them:
 | `ModuleNotFoundError: No module named 'openai'` (or `azure`, `google`) | The virtual environment isn't active or dependencies aren't installed. Run `.venv\Scripts\activate` then `pip install -r requirements.txt`. |
 | `DefaultAzureCredential failed to retrieve a token` | You're not signed in to Azure on this machine. Run `az login`. On a headless cabinet, set up the service principal `.env` — see [Headless / unattended deployment](#headless--unattended-deployment). |
 | `... (403) ... PermissionDenied` or `Access denied` | Your identity (or service principal) lacks the **Cognitive Services OpenAI User** role on the Foundry resource. See [Azure AI Foundry setup](#azure-ai-foundry-setup), step 3. |
-| `(404) ... DeploymentNotFound` | `AZURE_OPENAI_DEPLOYMENT` or `AZURE_OPENAI_ENDPOINT` don't match your actual Foundry deployment. Double-check both near the top of `Vpin_Recommender.py`. |
+don't match your actual Foundry deployment. Double-check both in `vpin_recommender_config.py`. |
 | `GEMINI_API_KEY environment variable is not set` | Only relevant if you chose the Gemini backend (or fallback tried it). Either set the key or set `AI_PROVIDER=azure`. |
 | `(401) ... invalid_client` or `AADSTS7000215` | The service principal secret in `.env` is wrong or expired. Regenerate it with `az ad app credential reset --id <appId>` and update `.env`. |
 | `database is locked` | PinUp Popper (or another tool) has `PUPDatabase.db` open. Close it and re-run. Always back up the database first. |
