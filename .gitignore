@@ -8,3 +8,4 @@ ai_recommendations.json
 ai_recommendations old.json
 PUPDatabase.db
 __pycache__/
+images/*.zip

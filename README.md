@@ -387,12 +387,12 @@ The `images/` folder includes ready-made **wheel images** you can use for your A
 |:---:|:---:|
 | ![AI Recommended wheel](images/ai%20recommended%20wheel.png) | ![AI Recommended EM wheel](images/ai%20recommended%20em%20wheel.png) |
 
-Two resolutions are provided for each:
+Two styles are provided for each category:
 
-- `ai recommended wheel.png` / `ai recommended em wheel.png` — standard resolution, good for most setups
-- `ai recommended wheels.png` / `ai recommended em wheels.png` — high resolution (3072×3072) for 4K displays
+- `ai recommended wheel.png` / `ai recommended em wheel.png` — a single, ready-to-use wheel (1600×1600 PNG). **Use these on your cabinet.**
+- `ai recommended wheels.webp` / `ai recommended em wheels.webp` — a medley of **4 design variations** in one image, so you can pick the look you prefer and crop/export your favorite.
 
-To apply one to a playlist, open the **PinUp Popper Setup Utility**, select your playlist (e.g. the one set by `RECS_PLAYLIST_ID`, or your dynamic `AI_Suggested` playlist), and set its wheel/media image to the corresponding file. The General art suits your non-EM playlist and the EM art suits your electromechanical playlist.
+To apply one to a playlist, open the **PinUp Popper Setup Utility**, select your playlist (e.g. the one set by `RECS_PLAYLIST_ID`, or your dynamic `AI_Suggested` playlist), and set its wheel/media image to the corresponding PNG. The General art suits your non-EM playlist and the EM art suits your electromechanical playlist.
 
 ### Emulator IDs
 
