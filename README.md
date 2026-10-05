@@ -378,6 +378,21 @@ Alternatively, if `ADD_SUGGESTED_TAGS` is `True`, recommended games are tagged w
 SELECT * FROM Games WHERE TAGS LIKE '%AI_Suggested%'
 ```
 
+### Wheel art
+
+The `images/` folder includes ready-made **wheel images** you can use for your AI-recommended playlists in PinUp Popper — one for the **General** recommendations and one for the **EM** recommendations:
+
+| General | EM |
+|:---:|:---:|
+| ![AI Recommended wheel](images/ai%20recommended%20wheel.png) | ![AI Recommended EM wheel](images/ai%20recommended%20em%20wheel.png) |
+
+Two resolutions are provided for each:
+
+- `ai recommended wheel.png` / `ai recommended em wheel.png` — standard resolution, good for most setups
+- `ai recommended wheels.png` / `ai recommended em wheels.png` — high resolution (3072×3072) for 4K displays
+
+To apply one to a playlist, open the **PinUp Popper Setup Utility**, select your playlist (e.g. the one set by `RECS_PLAYLIST_ID`, or your dynamic `AI_Suggested` playlist), and set its wheel/media image to the corresponding file. The General art suits your non-EM playlist and the EM art suits your electromechanical playlist.
+
 ### Emulator IDs
 
 Set `TARGET_EMU_IDS` to the emulator IDs you want the recommender to analyze. You can find these in the PinUp Popper Setup Utility under the emulator configuration. Note that some emulators, like **PinballFX**, may not have standard filenames and would require additional work to integrate properly.
@@ -437,9 +452,11 @@ Common issues testers hit, and how to fix them:
 | File | Purpose |
 |------|---------|
 | `Vpin_Recommender.py` | Main script |
+| `vpin_recommender_config.py` | User-tunable settings (paths, provider, counts, rating influence, etc.) |
 | `requirements.txt` | Python dependencies |
 | `ai_prompt_payload_compact.txt` | Generated payload sent to AI (auto-created) |
 | `ai_recommendations.json` | AI output (auto-created) |
+| `images/` | Wheel art for the AI-recommended General and EM playlists |
 | `.env` | Your credentials — service principal and/or `GEMINI_API_KEY` (create manually, do not commit) |
 
 ## .gitignore recommendations
