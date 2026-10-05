@@ -27,15 +27,15 @@ DB_PATH = r"C:\vPinball\PinUPSystem\PUPDatabase.db"
 TARGET_EMU_IDS = "1,2,3" # add whaevever EMUIDs to include in analysis
 
 # Update a PinUp Popper playlist with recommended games?
-UPDATE_PLAYLIST = True
+UPDATE_PLAYLIST = False
 RECS_PLAYLIST_ID = 1234
 
 # Tag recommended games with 'AI_Suggested'?
 ADD_SUGGESTED_TAGS = True
 
 # Number of tables to recommend
-NUM_RECOMMENDATIONS = 10
-NUM_RECOMMENDATIONS_EM = 5
+NUM_RECOMMENDATIONS = 15
+NUM_RECOMMENDATIONS_EM = 10
 
 # Minimum game rating filter for candidate pool (0 = no filter)
 MIN_GAME_RATING = 0
@@ -46,7 +46,19 @@ HISTORY_DAYS = 365
 
 # Games played within this many days are excluded from recommendations.
 # Games in the history but last played MORE than this many days ago can still be recommended.
-REPLAY_WINDOW_DAYS = 90
+REPLAY_WINDOW_DAYS = 220
+
+# How strongly the user's personal star "rating" (1-5) should influence recommendations.
+# One of:
+#   "none"     - Ignore ratings entirely; rank purely on play behavior, manufacturer/era/theme
+#                patterns, freshness, and creator. Use when you want discovery driven only by
+#                what you actually play, not by past ratings.
+#   "light"    - Ratings are only a minor tie-breaker between otherwise-close candidates.
+#   "moderate" - Ratings are one meaningful signal balanced against play frequency/engagement
+#                and pattern matching (recommended default).
+#   "strong"   - Ratings are a primary signal of taste; heavily weight 5-star patterns and
+#                strongly prefer 4-5 rated candidates.
+RATING_INFLUENCE = "moderate"
 
 # Include "not_owned" recommendations from the VPIN Spreadsheet?
 # This is currently deactivated as there were inaccurate results trying to match real vs virtual with games the user doesn't have - 
@@ -334,15 +346,43 @@ def fetch_recommendations(cabinet_data):
     #     print("    Please set it before running. Example: set GROQ_API_KEY=your_key")
     #     sys.exit(1)
 
-    # Build the not_owned portion of the prompt only if enabled
+    # Build the optional "not_owned" portion of the prompt only if enabled.
+    # NOTE: This is an experimental future hook (see INCLUDE_NOT_OWNED above). When
+    # disabled, nothing related to not_owned is injected into the prompt so it cannot
+    # influence or degrade the core recommendations.
     if INCLUDE_NOT_OWNED:
-        not_owned_key_instruction = f"""       - "not_owned": an array of EXACTLY {NUM_NOT_OWNED} recommendations for tables the user does NOT already have in their candidate_pool but that match their play history patterns. Use your knowledge of the full virtual pinball ecosystem, including the VPIN Spreadsheet current CSV export at https://virtualpinballspreadsheet.github.io/export, to identify high-quality tables the user is missing. These table must exist virtually and available in the virtual pinball community but are absent from the user's local catalog."""
-        not_owned_field_instruction = """    For "not_owned" recommendations, each object must include: "game" (table name as commonly known), "confidence" (0-1 score), a location/link where it is available (if known), and "reason" (a brief explanation of why this table fits the user's preferences). Do NOT include an "id" field since these tables are not in the local database. Note that table naming across sources can be fuzzy and inexact, so use best-effort matching when checking whether a table is already in the candidate_pool."""
-        json_keys_desc = "three keys"
+        not_owned_constraint = f"""    - Not-Owned Suggestions: In addition to the above, include a "not_owned" array with EXACTLY {NUM_NOT_OWNED} suggestions for tables the user does NOT already have in their candidate_pool but that fit their play history patterns. These are speculative "you might also enjoy" ideas drawn from your own knowledge of the virtual pinball ecosystem.
+        - Each not_owned object must include: "game" (table name as commonly known), "confidence" (0.0-1.0), and "reason" (brief explanation of the fit). Do NOT include an "id" field for these.
+        - Only suggest tables you are confident actually exist as virtual pinball recreations. If unsure a table exists virtually, do not include it. Treat these as lower-confidence than owned picks.
+        - Table naming across sources is fuzzy; use best-effort matching and do NOT suggest a table that already appears (even approximately) in the candidate_pool."""
+        not_owned_schema = f""",
+      "not_owned": [
+        {{
+          "game": "<string table name>",
+          "confidence": <float between 0.0 and 1.0>,
+          "reason": "<string brief explanation>"
+        }}
+      ]"""
     else:
-        not_owned_key_instruction = ""
-        not_owned_field_instruction = ""
-        json_keys_desc = "two keys"
+        not_owned_constraint = ""
+        not_owned_schema = ""
+
+    # Build scoring criterion #5 based on how strongly ratings should influence output.
+    _rating_blocks = {
+        "none": """    5. User Rating Weight: IGNORE the "rating" field entirely for this run. Do NOT boost or penalize any table (in history or candidate_pool) based on its star rating. Base taste inference purely on play behavior (plays, seconds, recency) and manufacturer/era/theme/platform patterns. A high or low rating must have ZERO effect on the ranking.""",
+        "light": """    5. User Rating Weight: Treat the user's personal "rating" (1-5 scale) as a MINOR signal only — a tie-breaker, not a driver.
+       - Primary signals are play behavior and manufacturer/era/theme/platform patterns. Only when two candidates are otherwise near-equal, nudge slightly toward the higher-rated one.
+       - Do not let a high rating alone pull a table into the list if play-behavior/pattern signals are weak. An empty/missing rating is neutral.""",
+        "moderate": """    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as ONE meaningful signal, balanced against play frequency/engagement and manufacturer/era/theme/platform patterns — it should inform but not dominate.
+       - In history: a 5-star rating is a positive taste signal that reinforces that table's manufacturer/era/theme patterns, but weigh it alongside how often/recently the user actually plays. Rating 3 is neutral; 1-2 are mild negatives (don't overly penalize — it may just be a poor build of a great theme).
+       - In candidate_pool: give a moderate preference to 4-5 rated candidates and a mild penalty to 1-2, but do not let rating override strong play-behavior or pattern matches.
+       - An empty/missing rating means unknown — treat as neutral.""",
+        "strong": """    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as a STRONG signal of taste.
+       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns. Tables rated 4 are strong positives. Rating 3 is neutral. Ratings 1-2 are dislikes — however, don't overly penalize them because we don't know the reason - it could be a low quality version of an otherwise fantastic theme.
+       - In candidate_pool: strongly prefer candidates rated 4-5, give a small boost to 3, and penalize candidates rated 1-2 so they are only recommended if other signals are overwhelmingly strong.
+       - An empty/missing rating means unknown — treat as neutral; do not boost or penalize based on rating alone.""",
+    }
+    rating_criterion = _rating_blocks.get(RATING_INFLUENCE, _rating_blocks["moderate"])
 
     prompt = f"""
     You are an expert Virtual Pinball recommendation engine.
@@ -365,8 +405,8 @@ def fetch_recommendations(cabinet_data):
     
     ---
     [ANALYSIS STEP]
-    Before selecting tables, analyze the play history in two separate tracks:
-    1. General History (top_played_general): Identify favorite eras (e.g., 90s DMD), manufacturers (e.g., Williams, Bally, Stern), and high-engagement tables.
+    Reason through the following internally before selecting tables (do NOT include this reasoning in your output). Analyze the play history in two separate tracks:
+    1. General History (top_played_general): Identify favorite eras (e.g., 90s DMD), manufacturers (e.g., Williams, Bally, Stern), hardware platforms (e.g., WPC, WPC-95, Stern Spike), and high-engagement tables.
     2. EM History (top_played_em): Identify mechanical style preferences (e.g., Gottlieb 70s) and high-engagement tables.
     
     ---
@@ -376,10 +416,16 @@ def fetch_recommendations(cabinet_data):
     2. Theme Alignment: Bonus points if the table's theme aligns with frequently played tables (e.g., if user plays a lot of space-themed tables, a new space-themed table gets a boost).
     3. Freshness Boost: Add a moderate weight if "updated_days_ago" is less than 180.
     4. Creator Boost: Add a moderate weight if the game name or metadata from online sources indicates it is by: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, or EMUnderdogs.
-    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as a strong signal of taste.
-       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns. Tables rated 4 are strong positives. Rating 3 is neutral. Ratings 1-2 are dislikes — however, don't overly penalize them because we don't know the reason - it could be a low quality version of an otherwise fantastic theme.
-       - In candidate_pool: strongly prefer candidates rated 4-5, give a small boost to 3, and penalize candidates rated 1-2 so they are only recommended if other signals are overwhelmingly strong.
-       - An empty/missing rating means unknown — treat as neutral; do not boost or penalize based on rating alone.
+{rating_criterion}
+    6. Respect Natural Clustering:
+
+    ---
+    [CONFIDENCE SCORE]
+    The "confidence" value reflects how strongly a candidate matches the scoring criteria above:
+    - 1.0 = near-certain match (aligns with multiple strong signals, e.g., a favored manufacturer AND era AND theme).
+    - ~0.5 = a plausible but weaker match on a single signal.
+    - Near 0.0 = speculative.
+    Use the full range so the ranking is meaningful; reserve values above 0.9 for standout picks rather than clustering every item near the same number.
     
     ---
     [CRITICAL CONSTRAINTS]
@@ -389,10 +435,11 @@ def fetch_recommendations(cabinet_data):
     - Deduplication: Never recommend the same base game title twice. If a game has a standard version and a "(Videos)" version in the pool, prioritize the standard version and discard the "(Videos)" version. Do not output both.
     - Candidate Isolation: Only recommend games that are explicitly listed in the "candidate_pool". 
     - Do not recommend games from the play history if they were last played within {REPLAY_WINDOW_DAYS} days (i.e., last_played < {REPLAY_WINDOW_DAYS}). Games in the history with last_played >= {REPLAY_WINDOW_DAYS} ARE eligible for recommendation since enough time has passed.
-
+{not_owned_constraint}
     ---
     [OUTPUT FORMAT]
     Return ONLY a raw JSON object. Do not include markdown formatting, markdown code blocks (such as ```json) or any conversational text. 
+    Each recommendation's "reason" must be a short phrase (roughly 3-12 words) citing the SPECIFIC signal from the user's history that drove the pick — e.g., a manufacturer, era, hardware platform, theme, or a high personal rating ("Williams 90s DMD favorite", "matches your space-theme affinity", "you rated similar Gottlieb EMs 5 stars"). Do NOT use generic justifications like "popular" or "highly rated by the community".
 
     JSON Schema:
     {{
@@ -400,21 +447,24 @@ def fetch_recommendations(cabinet_data):
         {{
           "id": <int/string GameId>,
           "game": "<string exact_name>",
-          "confidence": <float between 0.0 and 1.0>
+          "confidence": <float between 0.0 and 1.0>,
+          "reason": "<string short phrase citing the specific history signal>"
         }}
       ],
       "em": [
         {{
           "id": <int/string GameId>,
           "game": "<string exact_name>",
-          "confidence": <float between 0.0 and 1.0>
+          "confidence": <float between 0.0 and 1.0>,
+          "reason": "<string short phrase citing the specific history signal>"
         }}
-      ]
+      ]{not_owned_schema}
     }}
 
     """
 
     log("[+] Preparing AI request...")
+    log(f"[+] Rating influence level: {RATING_INFLUENCE}")
 
     with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
         f.write(prompt)
@@ -432,17 +482,28 @@ def fetch_recommendations(cabinet_data):
         print("==================================================")
         general_recs = recommendations.get("general", [])
         em_recs = recommendations.get("em", [])
+
+        def _fmt(rec):
+            name = rec.get("game", "?")
+            conf = rec.get("confidence", "")
+            conf_str = f"{conf:.2f}" if isinstance(conf, (int, float)) else str(conf)
+            reason = rec.get("reason", "")
+            line = f"{name} (conf {conf_str})"
+            if reason:
+                line += f" - {reason}"
+            return line
+
         print(f"  --- General ({len(general_recs)}) ---")
         for i, rec in enumerate(general_recs, 1):
-            print(f"  {i}. {rec}")
+            print(f"  {i}. {_fmt(rec)}")
         print(f"  --- EM ({len(em_recs)}) ---")
         for i, rec in enumerate(em_recs, 1):
-            print(f"  {i}. {rec}")
+            print(f"  {i}. {_fmt(rec)}")
         if INCLUDE_NOT_OWNED:
             not_owned_recs = recommendations.get("not_owned", [])
             print(f"  --- Not Owned ({len(not_owned_recs)}) ---")
             for i, rec in enumerate(not_owned_recs, 1):
-                print(f"  {i}. {rec}")
+                print(f"  {i}. {_fmt(rec)}")
         print(f"==================================================")
         log(f"[+] Final JSON saved to: {RECS_OUTPUT_PATH}")
 
