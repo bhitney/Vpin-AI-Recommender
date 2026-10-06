@@ -280,22 +280,43 @@ def fetch_recommendations(cabinet_data):
         not_owned_constraint = ""
         not_owned_schema = ""
 
-    # Build scoring criterion #5 based on how strongly ratings should influence output.
+    # Build scoring criterion #5 (POSITIVE/neutral ratings 3-5) based on how strongly
+    # favorites should influence output. Negative ratings (1-2) are handled separately
+    # in criterion 5b below so the two can be tuned independently.
     _rating_blocks = {
-        "none": """    5. User Rating Weight: IGNORE the "rating" field entirely for this run. Do NOT boost or penalize any table (in history or candidate_pool) based on its star rating. Base taste inference purely on play behavior (plays, seconds, recency) and manufacturer/era/theme/platform patterns. A high or low rating must have ZERO effect on the ranking.""",
-        "light": """    5. User Rating Weight: Treat the user's personal "rating" (1-5 scale) as a MINOR signal only — a tie-breaker, not a driver.
+        "none": """    5. Positive Rating Weight (ratings 3-5): IGNORE high ratings for this run. Do NOT boost any table (in history or candidate_pool) because of a 3, 4, or 5 star rating. Base taste inference purely on play behavior (plays, seconds, recency) and manufacturer/era/theme/platform patterns. A high rating must have ZERO positive effect on the ranking. (Low ratings of 1-2 are handled separately below.)""",
+        "light": """    5. Positive Rating Weight (ratings 3-5): Treat a high "rating" (4-5) as a MINOR signal only — a tie-breaker, not a driver.
        - Primary signals are play behavior and manufacturer/era/theme/platform patterns. Only when two candidates are otherwise near-equal, nudge slightly toward the higher-rated one.
-       - Do not let a high rating alone pull a table into the list if play-behavior/pattern signals are weak. An empty/missing rating is neutral.""",
-        "moderate": """    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as ONE meaningful signal, balanced against play frequency/engagement and manufacturer/era/theme/platform patterns — it should inform but not dominate.
-       - In history: a 5-star rating is a positive taste signal that reinforces that table's manufacturer/era/theme patterns, but weigh it alongside how often/recently the user actually plays. Rating 3 is neutral; 1-2 are mild negatives (don't overly penalize — it may just be a poor build of a great theme).
-       - In candidate_pool: give a moderate preference to 4-5 rated candidates and a mild penalty to 1-2, but do not let rating override strong play-behavior or pattern matches.
-       - An empty/missing rating means unknown — treat as neutral.""",
-        "strong": """    5. User Rating Weight: Use the user's personal "rating" (1-5 scale) as a STRONG signal of taste.
-       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns. Tables rated 4 are strong positives. Rating 3 is neutral. Ratings 1-2 are dislikes — however, don't overly penalize them because we don't know the reason - it could be a low quality version of an otherwise fantastic theme.
-       - In candidate_pool: strongly prefer candidates rated 4-5, give a small boost to 3, and penalize candidates rated 1-2 so they are only recommended if other signals are overwhelmingly strong.
-       - An empty/missing rating means unknown — treat as neutral; do not boost or penalize based on rating alone.""",
+       - Do not let a high rating alone pull a table into the list if play-behavior/pattern signals are weak. A rating of 3 or an empty/missing rating is neutral.""",
+        "moderate": """    5. Positive Rating Weight (ratings 3-5): Use a high "rating" (4-5) as ONE meaningful positive signal, balanced against play frequency/engagement and manufacturer/era/theme/platform patterns — it should inform but not dominate.
+       - In history: a 5-star rating is a positive taste signal that reinforces that table's manufacturer/era/theme patterns (this positive signal CAN broaden to similar tables), but weigh it alongside how often/recently the user actually plays. Rating 3 is neutral.
+       - In candidate_pool: give a moderate preference to 4-5 rated candidates, but do not let rating override strong play-behavior or pattern matches.
+       - A rating of 3 or an empty/missing rating means neutral — do not boost on that basis.""",
+        "strong": """    5. Positive Rating Weight (ratings 3-5): Use a high "rating" (4-5) as a STRONG signal of taste.
+       - In history: tables rated 5 are top favorites — heavily weight their manufacturer/era/theme patterns and let that positive signal BROADEN to similar tables (same manufacturer/era/theme/platform). Tables rated 4 are strong positives. Rating 3 is neutral.
+       - In candidate_pool: strongly prefer candidates rated 4-5 and give a small boost to 3.
+       - A rating of 3 or an empty/missing rating means neutral — do not boost based on rating alone.""",
     }
     rating_criterion = _rating_blocks.get(RATING_INFLUENCE, _rating_blocks["moderate"])
+
+    # Build scoring criterion #5b (NEGATIVE ratings 1-2). A dislike is a deliberate signal, so
+    # this lever is independent of the positive one. CRITICAL: a negative rating penalizes ONLY
+    # that specific table — it must NEVER penalize the table's manufacturer, era, theme, or
+    # platform (a 1-star may just be a poor build of an otherwise great theme). This never
+    # hard-excludes a table; "strong" is the maximum penalty.
+    _negative_rating_blocks = {
+        "none": """    5b. Negative Rating Weight (ratings 1-2): IGNORE low ratings for this run. Do NOT penalize any table because it is rated 1 or 2; treat a 1-2 the same as an unrated/neutral table.""",
+        "light": """    5b. Negative Rating Weight (ratings 1-2): Treat a low "rating" (1-2) as a MINOR negative signal — a tie-breaker only.
+       - Apply the penalty ONLY to that specific table. Do NOT penalize its manufacturer, era, theme, or platform — a low rating may just be a poor build of a great theme.
+       - When two candidates are otherwise near-equal, nudge slightly away from the 1-2 rated one. Strong play-behavior/pattern signals easily override this.""",
+        "moderate": """    5b. Negative Rating Weight (ratings 1-2): Treat a low "rating" (1-2) as a MEANINGFUL negative signal on that specific table.
+       - Apply the penalty ONLY to that specific table. Do NOT penalize its manufacturer, era, theme, or platform — a low rating may just be a poor build of an otherwise great theme.
+       - In candidate_pool: give 1-2 rated candidates a clear penalty, but strong play-behavior or pattern signals can still override it.""",
+        "strong": """    5b. Negative Rating Weight (ratings 1-2): Treat a low "rating" (1-2) as a STRONG signal that the user dislikes that specific table — they have explicitly indicated they do not want it.
+       - Apply the penalty ONLY to that specific table. Do NOT penalize its manufacturer, era, theme, or platform — a low rating may just be a poor build of an otherwise great theme, and that broader pattern should remain fully eligible.
+       - In candidate_pool: heavily penalize 1-2 rated candidates so they are only recommended if other signals (play behavior, pattern match, recency) are overwhelmingly strong. Do NOT hard-exclude them — an earlier/alternate version may still occasionally be worth surfacing.""",
+    }
+    negative_rating_criterion = _negative_rating_blocks.get(NEGATIVE_RATING_INFLUENCE, _negative_rating_blocks["strong"])
 
     prompt = f"""
     You are an expert Virtual Pinball recommendation engine.
@@ -330,7 +351,8 @@ def fetch_recommendations(cabinet_data):
     3. Freshness Boost: Add a moderate weight if "updated_days_ago" is less than 180.
     4. Creator Boost: Add a moderate weight if the game name or metadata from online sources indicates it is by: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, or EMUnderdogs.
 {rating_criterion}
-    6. Respect Natural Clustering:
+{negative_rating_criterion}
+   6. Respect Natural Clustering:
 
     ---
     [CONFIDENCE SCORE]
@@ -378,6 +400,7 @@ def fetch_recommendations(cabinet_data):
 
     log("[+] Preparing AI request...")
     log(f"[+] Rating influence level: {RATING_INFLUENCE}")
+    log(f"[+] Negative rating influence level: {NEGATIVE_RATING_INFLUENCE}")
 
     with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
         f.write(prompt)

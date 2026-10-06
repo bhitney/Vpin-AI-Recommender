@@ -45,17 +45,38 @@ HISTORY_DAYS = 365
 # Games in the history but last played MORE than this many days ago can still be recommended.
 REPLAY_WINDOW_DAYS = 220
 
-# How strongly the user's personal star "rating" (1-5) should influence recommendations.
+# How strongly the user's POSITIVE/neutral star "rating" (3-5) should influence recommendations.
+# This lever governs how much your favorites (4-5) pull similar tables in. A high rating is
+# treated as a BROAD signal: it can reinforce that table's manufacturer/era/theme patterns.
+# Keep this lighter if you want variety and don't want 5-star tables (and their patterns) to
+# dominate every run. Negative ratings (1-2) are handled separately by NEGATIVE_RATING_INFLUENCE.
 # One of:
-#   "none"     - Ignore ratings entirely; rank purely on play behavior, manufacturer/era/theme
-#                patterns, freshness, and creator. Use when you want discovery driven only by
-#                what you actually play, not by past ratings.
-#   "light"    - Ratings are only a minor tie-breaker between otherwise-close candidates.
-#   "moderate" - Ratings are one meaningful signal balanced against play frequency/engagement
-#                and pattern matching (recommended default).
-#   "strong"   - Ratings are a primary signal of taste; heavily weight 5-star patterns and
-#                strongly prefer 4-5 rated candidates.
+#   "none"     - Ignore positive ratings entirely; rank purely on play behavior,
+#                manufacturer/era/theme patterns, freshness, and creator. Use when you want
+#                discovery driven only by what you actually play, not by past ratings.
+#   "light"    - Positive ratings are only a minor tie-breaker between otherwise-close candidates.
+#   "moderate" - Positive ratings are one meaningful signal balanced against play
+#                frequency/engagement and pattern matching (recommended default).
+#   "strong"   - Positive ratings are a primary signal of taste; heavily weight 5-star patterns
+#                and strongly prefer 4-5 rated candidates.
 RATING_INFLUENCE = "moderate"
+
+# How strongly the user's NEGATIVE star "rating" (1-2) should influence recommendations.
+# This is a SEPARATE lever from RATING_INFLUENCE so you can, for example, let favorites nudge
+# results lightly while letting dislikes push hard. A 1-2 rating is a deliberate "I don't like
+# this" signal, so you may want it to weigh more strongly than your positive ratings.
+# IMPORTANT: A negative rating penalizes ONLY that specific table — it never penalizes the
+# table's manufacturer, era, theme, or platform (a 1-star might just be a poor build of an
+# otherwise great theme). Max is "strong" (not a hard exclude) because recency/other signals
+# may still make an earlier/alternate version worth surfacing occasionally.
+# One of:
+#   "none"     - Ignore negative ratings entirely; a 1-2 is treated the same as unrated.
+#   "light"    - A 1-2 is a minor tie-breaker against an otherwise-close candidate.
+#   "moderate" - A 1-2 is a meaningful penalty on that specific table, but strong play-behavior
+#                or pattern signals can still override it.
+#   "strong"   - A 1-2 strongly penalizes that specific table so it is only recommended if other
+#                signals are overwhelmingly strong (recommended if you want dislikes respected).
+NEGATIVE_RATING_INFLUENCE = "strong"
 
 # Include "not_owned" recommendations from the VPIN Spreadsheet?
 # This is currently deactivated as there were inaccurate results trying to match real vs virtual with games the user doesn't have - 

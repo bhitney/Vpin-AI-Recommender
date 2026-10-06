@@ -355,7 +355,8 @@ Edit the settings in `vpin_recommender_config.py` to match your setup:
 | `MAX_AGE_MINUTES` | Minutes before a cached result expires and a new AI request is made |
 | `HISTORY_DAYS` | Days of play history to analyze |
 | `REPLAY_WINDOW_DAYS` | Games last played within this many days are excluded from recommendations |
-| `RATING_INFLUENCE` | How strongly your personal star ratings drive picks: `none`, `light`, `moderate` (default), or `strong` |
+| `RATING_INFLUENCE` | How strongly your high star ratings (4-5) drive picks: `none`, `light`, `moderate` (default), or `strong` |
+| `NEGATIVE_RATING_INFLUENCE` | How strongly your low star ratings (1-2) push a table out: `none`, `light`, `moderate`, or `strong` (default). Penalizes only that specific table, never its theme/era/manufacturer |
 | `INCLUDE_NOT_OWNED` | `True` to include external table suggestions from the VPIN Spreadsheet |
 | `NUM_NOT_OWNED` | Number of external table suggestions (only used when `INCLUDE_NOT_OWNED` is `True`) |
 
