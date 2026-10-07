@@ -104,9 +104,16 @@ AI_FALLBACK = True
 # --- Azure AI Foundry (keyless Entra ID auth; run `az login` first) ---
 # The resource has local API-key auth disabled by org policy, so authentication
 # uses your Azure CLI / Entra ID identity via DefaultAzureCredential.
+#
+# NOTE: The default endpoint below points at the author's personal Foundry
+# resource. Replace it with YOUR OWN Foundry endpoint (roll your own deployment)
+# — set AZURE_OPENAI_ENDPOINT or edit the fallback string here. The author's
+# endpoint is harmless to leave checked in (it requires an authorized Entra ID
+# login to use), but it won't work for you until you point at your own resource.
 AZURE_OPENAI_ENDPOINT = os.environ.get(
     "AZURE_OPENAI_ENDPOINT", "https://opsiq-foundry.cognitiveservices.azure.com/")
-AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "vpin-recommender-gpt5")
+# AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "vpin-recommender-gpt5")
+AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "vpin-recommender-gpt-6-sol")
 AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-10-21")
 
 # Sampling temperature for the Azure model. Reasoning models (gpt-5, o-series)

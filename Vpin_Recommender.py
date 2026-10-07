@@ -374,7 +374,7 @@ def fetch_recommendations(cabinet_data):
     ---
     [OUTPUT FORMAT]
     Return ONLY a raw JSON object. Do not include markdown formatting, markdown code blocks (such as ```json) or any conversational text. 
-    Each recommendation's "reason" must be a short phrase (roughly 3-12 words) citing the SPECIFIC signal from the user's history that drove the pick — e.g., a manufacturer, era, hardware platform, theme, or a high personal rating ("Williams 90s DMD favorite", "matches your space-theme affinity", "you rated similar Gottlieb EMs 5 stars"). Do NOT use generic justifications like "popular" or "highly rated by the community".
+    Each recommendation's "reason" must be a concise explanation (roughly 8-20 words) citing the 2-3 STRONGEST SPECIFIC signals from the user's history that drove the pick — e.g., a manufacturer, era, hardware platform, theme, or a high personal rating. Separate the factors with semicolons, ordered strongest first ("Williams 90s DMD favorite; matches your space-theme affinity; recent VPW build", "you rated similar Gottlieb EMs 5 stars; heavy playtime on 70s EMs"). Cite only factors genuinely supported by the data and do NOT use generic justifications like "popular" or "highly rated by the community".
 
     JSON Schema:
     {{
@@ -383,7 +383,7 @@ def fetch_recommendations(cabinet_data):
           "id": <int/string GameId>,
           "game": "<string exact_name>",
           "confidence": <float between 0.0 and 1.0>,
-          "reason": "<string short phrase citing the specific history signal>"
+          "reason": "<string citing the 2-3 strongest history signals, semicolon-separated>"
         }}
       ],
       "em": [
@@ -391,7 +391,7 @@ def fetch_recommendations(cabinet_data):
           "id": <int/string GameId>,
           "game": "<string exact_name>",
           "confidence": <float between 0.0 and 1.0>,
-          "reason": "<string short phrase citing the specific history signal>"
+          "reason": "<string citing the 2-3 strongest history signals, semicolon-separated>"
         }}
       ]{not_owned_schema}
     }}

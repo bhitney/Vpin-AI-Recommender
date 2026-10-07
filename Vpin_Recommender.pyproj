@@ -22,6 +22,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Vpin_Recommender.py" />
+    <Compile Include="vpin_recommender_config.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include=".github\" />
