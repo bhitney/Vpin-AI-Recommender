@@ -372,13 +372,31 @@ Edit the settings in `vpin_recommender_config.py` to match your setup:
 
 ### Playlist setup
 
-note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in `vpin_recommender_config.py` to that value.
+Note the ID of the playlist you want to use. Set `RECS_PLAYLIST_ID` in `vpin_recommender_config.py` to that value.
 
 Alternatively, if `ADD_SUGGESTED_TAGS` is `True`, recommended games are tagged with `AI_Suggested` and you can build a dynamic playlist using a SQL query of your choice, for example:
 
 ```sql
 SELECT * FROM Games WHERE TAGS LIKE '%AI_Suggested%'
 ```
+
+#### Optional - if logging AI results
+
+If you enable `LOG_AI_RECOMMENDATIONS`, each recommendation records its `Confidence` and `Reason` in the `CustomAiLog` table. This is useful for keeping a short history of the model's output and for reviewing which tables were recommended and why.
+
+Example query to join the current recommended set with the AI history:
+
+```sql
+SELECT *
+FROM Games g
+JOIN CustomAiLog ai ON g.GameID = ai.GameID
+WHERE TAGS LIKE '%AI_Suggested%'
+  AND ai.IsCurrent = 1
+ORDER BY ai.Confidence DESC
+```
+
+This will join the `Games` table to the new log table using `GameID`. The `Confidence` value is ordered highest first, the `IsCurrent = 1` filter keeps it limited to the current batch only, and the `TAGS` filter keeps this limited to the AI-suggested games you already tagged.
+You can further refine this by displaying the confidence score in popper, but that's beyond the scope of this guide.
 
 ### Wheel art
 
@@ -518,6 +536,29 @@ END;
 ```
 
 **Note: The TotalTimePlayedSecs and Flags are primarily there for debugging/validation.
+
+## Optional - Log AI Results
+
+If you want to keep a historical record of each AI recommendation's confidence and reason, you can create an optional `CustomAiLog` table in your `PUPDatabase.db`. This is not required for the recommender to work, but it gives you a clean audit trail of the model output over time. The table is designed as a simple slowly changing dimension (SCD-style) pattern: each game can have a current row with `IsCurrent = 1`, while older rows remain for history.
+
+> ⚠️ **Warning:** Please create a backup of your `PUPDatabase.db` file before making any schema changes.
+
+```sql
+-- Create the CustomAiLog table
+CREATE TABLE CustomAiLog (
+    UniqueID INTEGER PRIMARY KEY AUTOINCREMENT,
+    GameID INTEGER,
+    Confidence REAL NOT NULL DEFAULT 0.0,
+    Reason TEXT,
+    GenDate DATETIME DEFAULT(current_timestamp),
+    IsCurrent INTEGER NOT NULL DEFAULT 1 CHECK (IsCurrent IN (0, 1))
+);
+
+CREATE INDEX calGameIdIdx ON CustomAiLog (GameID);
+CREATE INDEX calIsCurrentIdx ON CustomAiLog (IsCurrent);
+```
+
+This lets you store values like the model's confidence (`Confidence`) and the narrative explanation (`Reason`) for each recommendation. In practice, the script can insert a row each time a recommendation is refreshed, then set the prior record for that `GameID` to `IsCurrent = 0` before inserting the new one.
 
 ### Using GamesStats
 

@@ -30,6 +30,10 @@ RECS_PLAYLIST_ID = 1234
 # Tag recommended games with 'AI_Suggested'?
 ADD_SUGGESTED_TAGS = True
 
+# Log each AI recommendation's confidence and reason to CustomAiLog for history
+# and additional analysis. This is optional and only writes when the table exists.
+LOG_AI_RECOMMENDATIONS = False
+
 # Number of tables to recommend
 NUM_RECOMMENDATIONS = 15
 NUM_RECOMMENDATIONS_EM = 10

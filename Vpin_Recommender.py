@@ -555,6 +555,57 @@ def update_game_tags(recommendations):
         conn.close()
 
 # ==============================================================================
+# AI RESULT LOGGING STEP
+# ==============================================================================
+def log_ai_recommendations(recommendations):
+    """Optional: write each recommendation's confidence and reason to CustomAiLog."""
+    if not LOG_AI_RECOMMENDATIONS:
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='CustomAiLog'")
+        if cursor.fetchone() is None:
+            log("[-] CustomAiLog table not found. Skipping AI recommendation logging.")
+            return
+
+        all_recs = recommendations.get("general", []) + recommendations.get("em", [])
+        if not all_recs:
+            log("[-] No AI recommendations to log.")
+            return
+
+        all_logged = []
+        for group_name in ("general", "em"):
+            for rec in recommendations.get(group_name, []):
+                game_id = rec.get("id")
+                confidence = rec.get("confidence")
+                reason = rec.get("reason")
+                if game_id is None or confidence is None:
+                    continue
+                all_logged.append((int(game_id), float(confidence), reason or ""))
+
+        if not all_logged:
+            log("[-] No AI data rows to log. Leaving CustomAiLog IsCurrent values unchanged.")
+            return
+
+        cursor.execute("UPDATE CustomAiLog SET IsCurrent = 0 WHERE IsCurrent = 1")
+        for game_id, confidence, reason in all_logged:
+            cursor.execute(
+                "INSERT INTO CustomAiLog (GameID, Confidence, Reason, GenDate, IsCurrent) VALUES (?, ?, ?, current_timestamp, 1)",
+                (game_id, confidence, reason)
+            )
+
+        conn.commit()
+        log(f"[+] Logged {len(all_logged)} AI recommendations to CustomAiLog; all previous rows now marked IsCurrent=0.")
+    except Exception as e:
+        log(f"[-] AI recommendation logging failed: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+# ==============================================================================
 # MAIN EXECUTION
 # ==============================================================================
 if __name__ == "__main__":
@@ -577,3 +628,5 @@ if __name__ == "__main__":
                 update_playlist(recommendations)
             if ADD_SUGGESTED_TAGS:
                 update_game_tags(recommendations)
+            if LOG_AI_RECOMMENDATIONS:
+                log_ai_recommendations(recommendations)
