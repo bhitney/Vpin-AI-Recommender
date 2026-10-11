@@ -1,6 +1,7 @@
 .venv/
 .env
 .vs/
+*.pyproj.user
 ai_prompt_payload_compact.txt
 ai_prompt_full.txt
 ai_prompt_payload.json
