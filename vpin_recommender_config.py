@@ -45,6 +45,27 @@ INCLUDE_NON_RATED = 1
 # Number of days of play history to analyze
 HISTORY_DAYS = 365
 
+# Play-history filters. These keep noise (tables launched briefly to test or record media)
+# out of the history sent to the AI, without editing the SQL in Vpin_Recommender.py.
+# Minimum number of plays (sessions) within HISTORY_DAYS for a table to count as history.
+HISTORY_MIN_PLAYS = 1
+# Minimum TOTAL seconds played within HISTORY_DAYS for a table to count as history.
+HISTORY_MIN_SECS = 60
+# Maximum number of history tables sent per track (general and EM), most recently played first.
+HISTORY_MAX_ROWS = 300
+
+# How strongly average session length (total seconds / plays) should influence recommendations.
+# Long average sessions suggest real enjoyment, but playtime can be deceptive (idling, finishing
+# a single mode), so an explicit star rating ALWAYS outweighs playtime. It only affects how much
+# a history table counts as a taste signal; it never penalizes a candidate.
+# One of:
+#   "none"     - Ignore session length entirely.
+#   "light"    - Long average sessions are a minor tie-breaker.
+#   "moderate" - Long average sessions are one meaningful signal; very short ones are discounted
+#                (recommended default).
+#   "strong"   - Long average sessions heavily weight that table's patterns; short ones are
+#                largely discounted.
+PLAYTIME_INFLUENCE = "moderate"
 # Games played within this many days are excluded from recommendations.
 # Games in the history but last played MORE than this many days ago can still be recommended.
 REPLAY_WINDOW_DAYS = 220

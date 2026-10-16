@@ -26,6 +26,7 @@ HISTORY_QUERY_GENERAL = f"""
 SELECT 
     count(1) as TotalPlays, 
     sum(SessionPlayedSecs) as TotalTimePlayedSecs, 
+    CAST(sum(SessionPlayedSecs) / count(1) AS INTEGER) as AvgSessionSecs,
     CAST(JULIANDAY('now') - JULIANDAY(max(cgl.PlayDate)) AS INTEGER) AS LastPlayedDays,
     g.GameId,
     GameDisplay, 
@@ -40,15 +41,16 @@ WHERE g.EMUID in ({TARGET_EMU_IDS})
   and PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
   and g.GameType IS NOT 'EM'
 GROUP BY cgl.GameID 
-HAVING TotalPlays > 1
-ORDER BY TotalPlays DESC
-LIMIT 250
+HAVING TotalPlays >= {int(HISTORY_MIN_PLAYS)} and TotalTimePlayedSecs >= {int(HISTORY_MIN_SECS)}
+ORDER BY max(cgl.PlayDate) DESC
+LIMIT {int(HISTORY_MAX_ROWS)}
 """
 
 HISTORY_QUERY_EM = f"""
 SELECT 
     count(1) as TotalPlays, 
     sum(SessionPlayedSecs) as TotalTimePlayedSecs, 
+    CAST(sum(SessionPlayedSecs) / count(1) AS INTEGER) as AvgSessionSecs,
     CAST(JULIANDAY('now') - JULIANDAY(max(cgl.PlayDate)) AS INTEGER) AS LastPlayedDays,
     g.GameId,
     GameDisplay, 
@@ -63,9 +65,9 @@ WHERE g.EMUID in ({TARGET_EMU_IDS})
   and PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
   and g.GameType = 'EM'
 GROUP BY cgl.GameID 
-HAVING TotalPlays > 1
-ORDER BY TotalPlays DESC
-LIMIT 250
+HAVING TotalPlays >= {int(HISTORY_MIN_PLAYS)} and TotalTimePlayedSecs >= {int(HISTORY_MIN_SECS)}
+ORDER BY max(cgl.PlayDate) DESC
+LIMIT {int(HISTORY_MAX_ROWS)}
 """
 
 LOCAL_CATALOG_QUERY = f"""
@@ -118,13 +120,13 @@ def extract_data():
         return ""
 
     lines = []
-    lines.append("## top_played_general [id,plays,secs,last_played,game,year,mfr,type,rating]")
+    lines.append("## top_played_general [id,plays,secs,avg_secs,last_played,game,year,mfr,type,rating]")
     for row in played_history_general:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('AvgSessionSecs', '')},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
-    lines.append("## top_played_em [id,plays,secs,last_played,game,year,mfr,type,rating]")
+    lines.append("## top_played_em [id,plays,secs,avg_secs,last_played,game,year,mfr,type,rating]")
     for row in played_history_em:
-        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
+        lines.append(f"{row.get('GameID', '')},{row['TotalPlays']},{row['TotalTimePlayedSecs']},{row.get('AvgSessionSecs', '')},{row.get('LastPlayedDays', '')},{row['GameDisplay']},{row.get('GameYear', '')},{row.get('Manufact', '')},{row.get('GameType', '')},{fmt_rating(row.get('GameRating'))}")
     lines.append("")
     lines.append("## candidate_pool [id,game,year,mfr,type,rating,updated_days_ago]")
     for row in available_catalog:
@@ -318,15 +320,33 @@ def fetch_recommendations(cabinet_data):
     }
     negative_rating_criterion = _negative_rating_blocks.get(NEGATIVE_RATING_INFLUENCE, _negative_rating_blocks["strong"])
 
+    # Build scoring criterion #5c (PLAYTIME). Uses avg_seconds (average session length) as an
+    # engagement signal. It is only a suggestion: explicit ratings always take precedence, and
+    # it never hard-excludes or penalizes a table (long sessions can be inflated by idling).
+    _playtime_blocks = {
+        "none": """    5c. Playtime Weight: IGNORE avg_seconds for this run. Do not boost or penalize any table based on session length.""",
+        "light": """    5c. Playtime Weight: Treat a high "avg_seconds" (long average sessions) as a MINOR engagement signal — a tie-breaker only.
+       - A star rating, when present, ALWAYS overrides playtime: never boost a low-rated (1-2) table because of long sessions.
+       - Short average sessions are NOT a negative signal by themselves.""",
+        "moderate": """    5c. Playtime Weight: Use "avg_seconds" (average session length) as ONE meaningful engagement signal. Tables with long average sessions indicate genuine enjoyment, so weight their manufacturer/era/theme patterns more heavily than patterns from tables with brief sessions.
+       - A star rating, when present, ALWAYS overrides playtime: long sessions can be inflated by idling or finishing a single mode, so never boost a table rated 1-2 because of playtime, and let a 4-5 rating outweigh short sessions.
+       - Very short average sessions (e.g., under 3 minutes) suggest testing or media capture; give those tables little weight as taste signals.
+       - Playtime only informs how much a history table counts; it is not a reason to penalize a candidate.""",
+        "strong": """    5c. Playtime Weight: Use "avg_seconds" (average session length) as a STRONG engagement signal. Heavily weight the manufacturer/era/theme/platform patterns of tables with long average sessions, and largely discount tables with very short average sessions (likely testing or media capture).
+       - A star rating, when present, ALWAYS overrides playtime: long sessions can be inflated by idling or finishing a single mode, so never boost a table rated 1-2 because of playtime, and let an explicit rating outweigh session length.
+       - Playtime only informs how much a history table counts; it is not a reason to penalize a candidate.""",
+    }
+    playtime_criterion = _playtime_blocks.get(PLAYTIME_INFLUENCE, _playtime_blocks["moderate"])
     prompt = f"""
     You are an expert Virtual Pinball recommendation engine.
     Your objective is to analyze a user's play history and select the best matching games from an available "candidate_pool". 
     The data below uses a compact format:
-    - "top_played_general" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (non-EM history)
-    - "top_played_em" rows are: id,plays,seconds,last_played,game,year,manufacturer,type,rating (EM history)
+    - "top_played_general" rows are: id,plays,seconds,avg_seconds,last_played,game,year,manufacturer,type,rating (non-EM history)
+    - "top_played_em" rows are: id,plays,seconds,avg_seconds,last_played,game,year,manufacturer,type,rating (EM history)
     - "id" is the unique GameId from the database
     - "plays" is the total number of play sessions in the last {HISTORY_DAYS} days
     - "seconds" is the total time played in seconds in the last {HISTORY_DAYS} days
+    - "avg_seconds" is the average length of a play session in seconds (seconds / plays)
     - "last_played" is the number of days since the game was last played
     - "candidate_pool" rows are: id,game,year,manufacturer,type,rating,updated_days_ago
     - "id" is the unique GameId from the database
@@ -352,6 +372,7 @@ def fetch_recommendations(cabinet_data):
     4. Creator Boost: Add a moderate weight if the game name or metadata from online sources indicates it is by: VPW, SuperTilted, VPX Wizards, Pincredibles, Uncle Paulie, or EMUnderdogs.
 {rating_criterion}
 {negative_rating_criterion}
+{playtime_criterion}
    6. Respect Natural Clustering:
 
     ---
@@ -401,6 +422,7 @@ def fetch_recommendations(cabinet_data):
     log("[+] Preparing AI request...")
     log(f"[+] Rating influence level: {RATING_INFLUENCE}")
     log(f"[+] Negative rating influence level: {NEGATIVE_RATING_INFLUENCE}")
+    log(f"[+] Playtime influence level: {PLAYTIME_INFLUENCE}")
 
     with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
         f.write(prompt)
