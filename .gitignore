@@ -10,3 +10,4 @@ ai_recommendations old.json
 PUPDatabase.db
 __pycache__/
 images/*.zip
+HistoryReport.html
