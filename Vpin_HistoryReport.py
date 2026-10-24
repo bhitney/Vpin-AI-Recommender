@@ -175,12 +175,10 @@ def build_payload(games, monthly, catalog, timing, daily):
         "catalogYears": [{"x": y, "manu": (c["Manufact"] or "").strip() or "Unknown"}
                          for c in catalog for y in [to_int(c["GameYear"])]
                          if y and 1930 <= y <= datetime.now().year + 1],
-        "byHour": [{"hour": h, "plays": sum(t["Plays"] for t in timing if t["Hour"] == h),
-                    "hours": round(sum(t["Secs"] or 0 for t in timing if t["Hour"] == h) / 3600, 1)}
-                   for h in range(24)],
-        "byDow": [{"dow": d, "plays": sum(t["Plays"] for t in timing if t["Dow"] == d),
-                   "hours": round(sum(t["Secs"] or 0 for t in timing if t["Dow"] == d) / 3600, 1)}
-                  for d in range(7)],
+        "dowHour": {"hours": [[round(sum(t["Secs"] or 0 for t in timing if t["Dow"] == d and t["Hour"] == h) / 3600, 2)
+                               for h in range(24)] for d in range(7)],
+                    "plays": [[sum(t["Plays"] for t in timing if t["Dow"] == d and t["Hour"] == h)
+                               for h in range(24)] for d in range(7)]},
         "coverage": coverage,
         "recency": recency,
         "monthly": monthly,
@@ -234,8 +232,11 @@ HTML = """<!DOCTYPE html>
   <div class="card"><h2>Tables by Rating</h2><div class="chart"><canvas id="cRate"></canvas></div></div>
   <div class="card"><h2>Tables by Last Played</h2><div class="chart"><canvas id="cRecency"></canvas></div></div>
   <div class="card"><h2>Catalog Coverage: Played vs Owned</h2><div class="chart"><canvas id="cCov"></canvas></div></div>
-  <div class="card"><h2>Hours Played by Time of Day</h2><div class="chart"><canvas id="cHour"></canvas></div></div>
-  <div class="card"><h2>Hours Played by Day of Week</h2><div class="chart"><canvas id="cDow"></canvas></div></div>
++
+
++
+
+  <div class="card wide"><h2>Day of Week &times; Hour of Day Heatmap (hours played)</h2><div id="heat2"></div></div>
   <div class="card wide"><h2>Manufacturer &times; Decade Heatmap (hours played)</h2><div id="heat"></div></div>
   <div class="card wide"><h2>Table Year vs Average Session Length</h2>
     <div class="chart tall"><canvas id="cScatter"></canvas></div>
@@ -266,8 +267,6 @@ bar('cYear', D.years.map(r=>r.year), D.years.map(r=>r.hours), {colors:PAL[1]});
 bar('cDec', D.decades.map(r=>r.name), D.decades.map(r=>r.hours), {colors:PAL[2]});
 bar('cType', D.types.map(r=>r.name), D.types.map(r=>r.hours), {colors:PAL[3]});
 bar('cRate', D.ratings.map(r=>r.name), D.ratings.map(r=>r.tables), {colors:PAL[4], label:'Tables'});
-bar('cHour', D.byHour.map(r=>String(r.hour).padStart(2,'0')+':00'), D.byHour.map(r=>r.hours), {colors:PAL[6]});
-bar('cDow', ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], D.byDow.map(r=>r.hours), {colors:PAL[7]});
 bar('cRecency', D.recency.map(r=>r.label), D.recency.map(r=>r.tables), {colors:PAL[5], label:'Tables'});
 
 new Chart(document.getElementById('cMonth'), {
@@ -350,6 +349,17 @@ new Chart(document.getElementById('cScatter'), {
   document.getElementById('heat').innerHTML = h + '</table>';
 })();
 
+// Day x hour heatmap (hours across, days down)
+(function(){
+  const V = D.dowHour.hours, P = D.dowHour.plays, max = Math.max(0.01, ...V.flat());
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let h = '<table style="table-layout:fixed"><tr><th style="width:56px"></th>' +
+    V[0].map((_,i)=>`<th style="text-align:center;padding:5px 2px">${String(i).padStart(2,'0')}</th>`).join('') + '</tr>';
+  V.forEach((row,d)=>{ h += `<tr><td>${days[d]}</td>` + row.map((v,i)=>{
+    const a = v ? (0.12 + 0.88*v/max).toFixed(2) : 0;
+    return `<td title="${days[d]} ${String(i).padStart(2,'0')}:00 \u2014 ${v} h, ${P[d][i]} sessions" style="text-align:center;padding:8px 2px;background:rgba(79,209,197,${a});color:${a>0.55?'#111':'inherit'}">${v?v.toFixed(1):''}</td>`;}).join('') + '</tr>'; });
+  document.getElementById('heat2').innerHTML = h + '</table>';
+})();
 // Top tables
 document.getElementById('top').innerHTML =
   '<table><tr><th>Table</th><th>Manufacturer</th><th>Year</th><th>Type</th><th>Rating</th><th>Sessions</th><th>Hours</th><th>Avg min</th><th>Last played (days)</th></tr>' +
