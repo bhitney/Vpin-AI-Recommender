@@ -291,7 +291,7 @@ new Chart(document.getElementById('cScatter'), {
     backgroundColor:colorOf(m)+'aa', borderColor:colorOf(m)}))},
   options:{maintainAspectRatio:false, plugins:{legend:{display:true, position:'right'}, tooltip:{callbacks:{label:c=>{
     const p=c.raw.p; return `${p.label} (${p.manu}, ${p.x}) \u2014 ${p.y} min/session, ${p.r} h`;}}}},
-    scales:{x:{title:{display:true,text:'Table year'}}, y:{title:{display:true,text:'Avg session (min)'}}}}});
+    scales:{x:{ticks:{callback:v=>String(v)}, title:{display:true,text:'Table year'}}, y:{title:{display:true,text:'Avg session (min)'}}}}});
 
 // Unique tables per year (or bin) by manufacturer; solid = played, dashed = whole catalog
 (function(){
