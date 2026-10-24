@@ -232,9 +232,6 @@ HTML = """<!DOCTYPE html>
   <div class="card"><h2>Tables by Rating</h2><div class="chart"><canvas id="cRate"></canvas></div></div>
   <div class="card"><h2>Tables by Last Played</h2><div class="chart"><canvas id="cRecency"></canvas></div></div>
   <div class="card"><h2>Catalog Coverage: Played vs Owned</h2><div class="chart"><canvas id="cCov"></canvas></div></div>
-+
-
-+
 
   <div class="card wide"><h2>Day of Week &times; Hour of Day Heatmap (hours played)</h2><div id="heat2"></div></div>
   <div class="card wide"><h2>Manufacturer &times; Decade Heatmap (hours played)</h2><div id="heat"></div></div>
