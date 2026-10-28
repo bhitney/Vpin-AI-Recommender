@@ -36,13 +36,31 @@ GROUP BY cgl.GameID
 HAVING sum(SessionPlayedSecs) >= 60
 """
 
-MONTHLY_QUERY = f"""
-SELECT strftime('%Y-%m', PlayDate) AS Month, count(1) AS Plays, sum(SessionPlayedSecs) AS Secs
+# Page-level time filter: (key, label, days). days=None means all time.
+RANGES = [("1d", "1 day", 1), ("1w", "1 week", 7), ("1m", "1 month", 30),
+          ("1y", "1 year", 365), ("all", "All", None)]
+ALL_DAYS = 36500
+# Trend-chart granularity per range (strftime format, chart title)
+BUCKETS = {"1d": ("%Y-%m-%d %H:00", "Hourly"), "1w": ("%Y-%m-%d", "Daily"), "1m": ("%Y-%m-%d", "Daily"),
+           "1y": ("%Y-%m", "Monthly"), "all": ("%Y-%m", "Monthly")}
+
+
+def monthly_query(fmt):
+    return f"""
+SELECT strftime('{fmt}', PlayDate) AS Month, count(1) AS Plays, sum(SessionPlayedSecs) AS Secs
 FROM Games g JOIN CustomGameLog cgl ON g.GameID = cgl.GameID
 WHERE g.EMUID IN ({TARGET_EMU_IDS}) AND g.visible = 1
   AND PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
 GROUP BY Month ORDER BY Month
 """
+
+
+def default_range(days):
+    """Smallest range covering the configured window (365 -> '1y')."""
+    for key, _, d in RANGES:
+        if d is not None and days <= d:
+            return key
+    return "all"
 
 # PlayDate is stored in local time; %w gives 0=Sunday..6=Saturday
 TIME_QUERY = f"""
@@ -76,17 +94,27 @@ def to_int(v):
 
 
 def load():
+    """Return ({range key: (games, monthly, timing, daily)}, catalog)."""
     if not os.path.exists(DB_PATH):
         sys.exit(f"Database not found at {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    games = [dict(r) for r in cur.execute(GAMES_QUERY, (DAYS,))]
-    monthly = [dict(r) for r in cur.execute(MONTHLY_QUERY, (DAYS,))]
-    timing = [dict(r) for r in cur.execute(TIME_QUERY, (DAYS,))]
-    daily = [dict(r) for r in cur.execute(DAILY_QUERY, (DAYS,))]
+    out = {}
+    for key, _, days in RANGES:
+        d = (days or ALL_DAYS,)
+        out[key] = (
+            _clean_games([dict(r) for r in cur.execute(GAMES_QUERY, d)]),
+            [dict(r) for r in cur.execute(monthly_query(BUCKETS[key][0]), d)],
+            [dict(r) for r in cur.execute(TIME_QUERY, d)],
+            [dict(r) for r in cur.execute(DAILY_QUERY, d)],
+        )
     catalog = [dict(r) for r in cur.execute(CATALOG_QUERY)]
     conn.close()
+    return out, catalog
+
+
+def _clean_games(games):
     for g in games:
         g["Year"] = to_int(g["GameYear"])
         if g["Year"] is not None and not 1930 <= g["Year"] <= datetime.now().year + 1:
@@ -98,7 +126,7 @@ def load():
         g["Hours"] = round((g["Secs"] or 0) / 3600, 2)
         g["AvgMin"] = round((g["Secs"] or 0) / g["Plays"] / 60, 1)
         g["Name"] = g["GameDisplay"]
-    return games, monthly, catalog, timing, daily
+    return games
 
 
 def decade(y):
@@ -115,7 +143,25 @@ def group(games, keyfn):
     return out
 
 
-def build_payload(games, monthly, catalog, timing, daily):
+def build_all():
+    """One payload per range, plus the shared catalog years (identical for every range)."""
+    data, catalog = load()
+    payloads = {}
+    for key, _, days in RANGES:
+        games, monthly, timing, daily = data[key]
+        if days is None:  # all time: per-day averages use the span since the first play
+            first = min((datetime.strptime(d["Day"], "%Y-%m-%d") for d in daily), default=None)
+            days = max(1, (datetime.now() - first).days + 1) if first else 1
+        payloads[key] = build_payload(games, monthly, catalog, timing, daily, days)
+        payloads[key]["trend"] = BUCKETS[key][1]
+    catalog_years = payloads["all"].pop("catalogYears")
+    for p in payloads.values():
+        p.pop("catalogYears", None)
+    return {"ranges": [{"key": k, "label": l} for k, l, _ in RANGES],
+            "default": default_range(DAYS), "data": payloads, "catalogYears": catalog_years}
+
+
+def build_payload(games, monthly, catalog, timing, daily, days):
     by_manu = group(games, lambda g: g["Manufact"])
     manu_rows = sorted(by_manu.items(), key=lambda kv: -kv[1]["hours"])
     top_manus = [m for m, _ in manu_rows[:12]]
@@ -152,7 +198,7 @@ def build_payload(games, monthly, catalog, timing, daily):
 
     rounded = lambda d: {k: round(v, 1) if isinstance(v, float) else v for k, v in d.items()}
     return {
-        "days": DAYS,
+        "days": days,
         "summary": {
             "tables": len(games),
             "plays": sum(g["Plays"] for g in games),
@@ -160,9 +206,9 @@ def build_payload(games, monthly, catalog, timing, daily):
             "manus": len(by_manu),
             "catalog": len(catalog),
             "activeDays": len(daily),
-            "tablesPerDay": round(sum(d["Tables"] for d in daily) / DAYS, 2),
-            "playsPerDay": round(sum(d["Plays"] for d in daily) / DAYS, 2),
-            "hoursPerDay": round(sum(d["Secs"] or 0 for d in daily) / 3600 / DAYS, 2),
+            "tablesPerDay": round(sum(d["Tables"] for d in daily) / days, 2),
+            "playsPerDay": round(sum(d["Plays"] for d in daily) / days, 2),
+            "hoursPerDay": round(sum(d["Secs"] or 0 for d in daily) / 3600 / days, 2),
         },
         "manu": [{"name": m, **rounded(v)} for m, v in manu_rows[:15]],
         "years": [{"year": y, **rounded(by_year[y])} for y in years],
@@ -219,13 +265,21 @@ HTML = """<!DOCTYPE html>
   th { color:var(--muted); position:sticky; top:0; background:var(--surface); cursor:default; }
   .note { color:var(--muted); font-size:12px; margin-top:8px; }
   .scroll { max-height:480px; overflow:auto; }
+  .rangebar { display:flex; margin-bottom:16px; }
+  .rangebar button { background:var(--soft); color:var(--muted); border:1px solid var(--border); margin-left:-1px;
+                     padding:6px 16px; cursor:pointer; font:inherit; font-size:13px; }
+  .rangebar button:first-child { border-radius:6px 0 0 6px; margin-left:0; }
+  .rangebar button:last-child { border-radius:0 6px 6px 0; }
+  .rangebar button:hover { color:var(--text); }
+  .rangebar button.active { background:var(--surface); color:var(--pt); border-color:var(--pt); position:relative; z-index:1; }
 </style></head><body>
 <h1>VPin Play History</h1>
 <div class="sub" id="sub"></div>
+<div class="rangebar" id="rangeBar"></div>
 <div class="summary" id="summary"></div>
 <div class="grid">
   <div class="card"><h2>Hours by Manufacturer (top 15)</h2><div class="chart tall"><canvas id="cManu"></canvas></div></div>
-  <div class="card"><h2>Monthly Play Trend</h2><div class="chart"><canvas id="cMonth"></canvas></div></div>
+  <div class="card"><h2 id="trendTitle">Monthly Play Trend</h2><div class="chart tall"><canvas id="cMonth"></canvas></div></div>
   <div class="card"><h2>Hours by Table Year</h2><div class="chart tall"><canvas id="cYear"></canvas></div></div>
   <div class="card"><h2>Hours by Decade</h2><div class="chart"><canvas id="cDec"></canvas></div></div>
   <div class="card"><h2>Hours by Table Type</h2><div class="chart"><canvas id="cType"></canvas></div></div>
@@ -245,19 +299,34 @@ HTML = """<!DOCTYPE html>
   <div class="card wide"><h2>Top 40 Tables by Time Played</h2><div class="scroll" id="top"></div></div>
 </div>
 <script>
-const D = __DATA__;
+const ALL = __DATA__;
+let D;
 const PAL = ['#4fd1c5','#e0457b','#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fbbf24','#38bdf8','#c084fc','#fb923c','#94a3b8'];
 Chart.defaults.color = '#d0d0d0'; Chart.defaults.borderColor = '#474747';
 const fmt = n => n.toLocaleString();
-document.getElementById('sub').textContent = `Last ${D.days} days \u00b7 generated ${new Date().toLocaleString()}`;
+const generated = new Date().toLocaleString();
+const charts = [];
+const track = (el, cfg) => { const c = new Chart(el, cfg); charts.push(c); return c; };
+
+const rangeBar = document.getElementById('rangeBar');
+rangeBar.innerHTML = ALL.ranges.map(r=>`<button type="button" data-r="${r.key}">${r.label}</button>`).join('');
+rangeBar.onclick = e => { const b = e.target.closest('button'); if (b) render(b.dataset.r); };
+
+const bar = (id, labels, data, o={}) => track(document.getElementById(id), {
+  type:'bar', data:{labels, datasets:[{data, backgroundColor:o.colors||PAL[0], label:o.label||'Hours'}]},
+  options:{indexAxis:o.horizontal?'y':'x', maintainAspectRatio:false, plugins:{legend:{display:false}}}});
+
+function render(key){
+charts.splice(0).forEach(c=>c.destroy());
+D = ALL.data[key]; D.catalogYears = ALL.catalogYears;
+rangeBar.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.r===key));
+const rangeLabel = ALL.ranges.find(r=>r.key===key).label;
+document.getElementById('sub').textContent = `${key==='all' ? 'All time' : 'Last ' + rangeLabel} \u00b7 generated ${generated}` + (D.summary.tables ? '' : ' \u00b7 no play recorded in this period');
+document.getElementById('trendTitle').textContent = `${D.trend} Play Trend`;
 const S = D.summary;
 document.getElementById('summary').innerHTML =
   [['Tables played',S.tables],['of catalog',S.catalog],['Sessions',S.plays],['Hours',S.hours],['Manufacturers',S.manus],['Active days',S.activeDays],['Tables / day',S.tablesPerDay],['Sessions / day',S.playsPerDay],['Hours / day',S.hoursPerDay]]
   .map(([k,v])=>`<div><b>${fmt(v)}</b>${k}</div>`).join('');
-
-const bar = (id, labels, data, o={}) => new Chart(document.getElementById(id), {
-  type:'bar', data:{labels, datasets:[{data, backgroundColor:o.colors||PAL[0], label:o.label||'Hours'}]},
-  options:{indexAxis:o.horizontal?'y':'x', maintainAspectRatio:false, plugins:{legend:{display:false}}}});
 
 bar('cManu', D.manu.map(r=>r.name), D.manu.map(r=>r.hours), {horizontal:true});
 bar('cYear', D.years.map(r=>r.year), D.years.map(r=>r.hours), {colors:PAL[1]});
@@ -266,14 +335,14 @@ bar('cType', D.types.map(r=>r.name), D.types.map(r=>r.hours), {colors:PAL[3]});
 bar('cRate', D.ratings.map(r=>r.name), D.ratings.map(r=>r.tables), {colors:PAL[4], label:'Tables'});
 bar('cRecency', D.recency.map(r=>r.label), D.recency.map(r=>r.tables), {colors:PAL[5], label:'Tables'});
 
-new Chart(document.getElementById('cMonth'), {
+track(document.getElementById('cMonth'), {
   data:{labels:D.monthly.map(r=>r.Month), datasets:[
     {type:'bar', label:'Hours', data:D.monthly.map(r=>+(r.Secs/3600).toFixed(1)), backgroundColor:PAL[0], yAxisID:'y', order:1},
     {type:'line', label:'Sessions', data:D.monthly.map(r=>r.Plays), borderColor:PAL[1], backgroundColor:PAL[1], yAxisID:'y1', tension:.25, order:0}]},
   options:{maintainAspectRatio:false, scales:{y:{title:{display:true,text:'Hours'}},
     y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'Sessions'}}}}});
 
-new Chart(document.getElementById('cCov'), {
+track(document.getElementById('cCov'), {
   type:'bar', data:{labels:D.coverage.map(r=>r.manu), datasets:[
     {label:'Owned', data:D.coverage.map(r=>r.owned), backgroundColor:'#5f5f5f'},
     {label:'Played', data:D.coverage.map(r=>r.played), backgroundColor:PAL[0]}]},
@@ -281,7 +350,7 @@ new Chart(document.getElementById('cCov'), {
 
 const topManus = D.manu.slice(0,8).map(r=>r.name);
 const colorOf = m => { const i = topManus.indexOf(m); return i<0 ? '#777' : PAL[i]; };
-new Chart(document.getElementById('cScatter'), {
+track(document.getElementById('cScatter'), {
   type:'bubble', data:{datasets:[...topManus, 'Other'].map(m=>({label:m,
     data:D.scatter.filter(p=>(topManus.includes(p.manu)?p.manu:'Other')===m).map(p=>({x:p.x,y:p.y,r:Math.max(3,Math.min(24,Math.sqrt(p.r)*3)),p})),
     backgroundColor:colorOf(m)+'aa', borderColor:colorOf(m)}))},
@@ -326,14 +395,14 @@ new Chart(document.getElementById('cScatter'), {
     series.forEach(s=>datasets.push(mk(s, played[s], false)));
     const data = {labels:labels.map(y=>bin===1?y:`${y}-${y+bin-1}`), datasets};
     if (chart) { chart.data = data; chart.options.scales.y.max = ceil; chart.update(); return; }
-    chart = new Chart(document.getElementById('cManuYear'), {type:'line', data,
+    chart = track(document.getElementById('cManuYear'), {type:'line', data,
       options:{maintainAspectRatio:false, plugins:{
         legend:{position:'right', labels:{filter:i=>!i.text.endsWith('(catalog)')}},
         tooltip:{callbacks:{label:c=>{const r=c.dataset.raw[c.dataIndex]; return c.dataset.label+': '+r+(r>c.parsed.y?' (off chart)':'');}}}},
         scales:{x:{title:{display:true,text:'Table year'}}, y:{beginAtZero:true, max:ceil, ticks:{precision:0}, title:{display:true,text:'Unique tables'}}}}});
   }
-  document.getElementById('binSel').addEventListener('change', draw);
-  document.getElementById('catChk').addEventListener('change', draw);
+  document.getElementById('binSel').onchange = draw;
+  document.getElementById('catChk').onchange = draw;
   draw();
 })();
 // Heatmap
@@ -361,19 +430,21 @@ new Chart(document.getElementById('cScatter'), {
 document.getElementById('top').innerHTML =
   '<table><tr><th>Table</th><th>Manufacturer</th><th>Year</th><th>Type</th><th>Rating</th><th>Sessions</th><th>Hours</th><th>Avg min</th><th>Last played (days)</th></tr>' +
   D.top.map(r=>`<tr><td>${r.name}</td><td>${r.manu}</td><td>${r.year??''}</td><td>${r.type}</td><td>${r.rating?r.rating+'\u2605':''}</td><td>${r.plays}</td><td>${r.hours}</td><td>${r.avg}</td><td>${r.last}</td></tr>`).join('') + '</table>';
-</script></body></html>
+  }
+  render(ALL.default);
+  </script></body></html>
 """
 
 
 def main():
-    games, monthly, catalog, timing, daily = load()
-    if not games:
-        sys.exit("No play history found for the configured window.")
-    payload = build_payload(games, monthly, catalog, timing, daily)
+    payload = build_all()
+    if not payload["data"]["all"]["summary"]["tables"]:
+        sys.exit("No play history found.")
     data = json.dumps(payload, default=str).replace("</", "<\\/")
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(HTML.replace("__DATA__", data))
-    print(f"Wrote {OUT} ({payload['summary']['tables']} tables, {DAYS} days)")
+    shown = payload["data"][payload["default"]]["summary"]["tables"]
+    print(f"Wrote {OUT} ({shown} tables in default range '{payload['default']}')")
 
 
 if __name__ == "__main__":
