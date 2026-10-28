@@ -225,8 +225,8 @@ HTML = """<!DOCTYPE html>
 <div class="summary" id="summary"></div>
 <div class="grid">
   <div class="card"><h2>Hours by Manufacturer (top 15)</h2><div class="chart tall"><canvas id="cManu"></canvas></div></div>
-  <div class="card"><h2>Hours by Table Year</h2><div class="chart tall"><canvas id="cYear"></canvas></div></div>
   <div class="card"><h2>Monthly Play Trend</h2><div class="chart"><canvas id="cMonth"></canvas></div></div>
+  <div class="card"><h2>Hours by Table Year</h2><div class="chart tall"><canvas id="cYear"></canvas></div></div>
   <div class="card"><h2>Hours by Decade</h2><div class="chart"><canvas id="cDec"></canvas></div></div>
   <div class="card"><h2>Hours by Table Type</h2><div class="chart"><canvas id="cType"></canvas></div></div>
   <div class="card"><h2>Tables by Rating</h2><div class="chart"><canvas id="cRate"></canvas></div></div>
@@ -268,8 +268,8 @@ bar('cRecency', D.recency.map(r=>r.label), D.recency.map(r=>r.tables), {colors:P
 
 new Chart(document.getElementById('cMonth'), {
   data:{labels:D.monthly.map(r=>r.Month), datasets:[
-    {type:'bar', label:'Hours', data:D.monthly.map(r=>+(r.Secs/3600).toFixed(1)), backgroundColor:PAL[0], yAxisID:'y'},
-    {type:'line', label:'Sessions', data:D.monthly.map(r=>r.Plays), borderColor:PAL[1], backgroundColor:PAL[1], yAxisID:'y1', tension:.25}]},
+    {type:'bar', label:'Hours', data:D.monthly.map(r=>+(r.Secs/3600).toFixed(1)), backgroundColor:PAL[0], yAxisID:'y', order:1},
+    {type:'line', label:'Sessions', data:D.monthly.map(r=>r.Plays), borderColor:PAL[1], backgroundColor:PAL[1], yAxisID:'y1', tension:.25, order:0}]},
   options:{maintainAspectRatio:false, scales:{y:{title:{display:true,text:'Hours'}},
     y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'Sessions'}}}}});
 
