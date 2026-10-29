@@ -28,8 +28,9 @@ GAMES_QUERY = f"""
 SELECT count(1) AS Plays,
        sum(SessionPlayedSecs) AS Secs,
        CAST(JULIANDAY('now') - JULIANDAY(max(cgl.PlayDate)) AS INTEGER) AS LastPlayedDays,
-       g.GameID, GameDisplay, GameYear, Manufact, GameType, GameRating
+       g.GameID, g.EMUID, e.EmuDisplay, GameDisplay, GameYear, Manufact, GameType, GameRating
 FROM Games g JOIN CustomGameLog cgl ON g.GameID = cgl.GameID
+LEFT JOIN Emulators e ON e.EMUID = g.EMUID
 WHERE g.EMUID IN ({TARGET_EMU_IDS}) AND g.visible = 1
   AND PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
 GROUP BY cgl.GameID
@@ -47,11 +48,12 @@ BUCKETS = {"1d": ("%Y-%m-%d %H:00", "Hourly"), "1w": ("%Y-%m-%d", "Daily"), "1m"
 
 def monthly_query(fmt):
     return f"""
-SELECT strftime('{fmt}', PlayDate) AS Month, count(1) AS Plays, sum(SessionPlayedSecs) AS Secs
+SELECT strftime('{fmt}', PlayDate) AS Month, g.EMUID, e.EmuDisplay, count(1) AS Plays, sum(SessionPlayedSecs) AS Secs
 FROM Games g JOIN CustomGameLog cgl ON g.GameID = cgl.GameID
+LEFT JOIN Emulators e ON e.EMUID = g.EMUID
 WHERE g.EMUID IN ({TARGET_EMU_IDS}) AND g.visible = 1
   AND PlayDate > DateTime('Now', 'LocalTime', '-' || ? || ' Day')
-GROUP BY Month ORDER BY Month
+GROUP BY Month, g.EMUID ORDER BY Month
 """
 
 
@@ -126,6 +128,7 @@ def _clean_games(games):
         g["Hours"] = round((g["Secs"] or 0) / 3600, 2)
         g["AvgMin"] = round((g["Secs"] or 0) / g["Plays"] / 60, 1)
         g["Name"] = g["GameDisplay"]
+        g["Emu"] = (g["EmuDisplay"] or "").strip() or f"Emulator {g['EMUID']}"
     return games
 
 
@@ -196,6 +199,18 @@ def build_payload(games, monthly, catalog, timing, daily, days):
         for lbl, lo, hi in recency_buckets
     ]
 
+    by_emu = group(games, lambda g: g["Emu"])
+    emu_rows = sorted(by_emu.items(), key=lambda kv: -kv[1]["hours"])
+    emu_names = {m["EMUID"]: (m["EmuDisplay"] or "").strip() or f"Emulator {m['EMUID']}" for m in monthly}
+    months = sorted({m["Month"] for m in monthly})
+    monthly_total = [{"Month": mo,
+                      "Plays": sum(m["Plays"] for m in monthly if m["Month"] == mo),
+                      "Secs": sum(m["Secs"] or 0 for m in monthly if m["Month"] == mo)} for mo in months]
+    monthly_emu = [{"name": emu_names[eid],
+                    "hours": [round(sum(m["Secs"] or 0 for m in monthly if m["Month"] == mo and m["EMUID"] == eid) / 3600, 2)
+                              for mo in months]}
+                   for eid in sorted(emu_names, key=lambda e: -sum(m["Secs"] or 0 for m in monthly if m["EMUID"] == e))]
+
     rounded = lambda d: {k: round(v, 1) if isinstance(v, float) else v for k, v in d.items()}
     return {
         "days": days,
@@ -204,6 +219,7 @@ def build_payload(games, monthly, catalog, timing, daily, days):
             "plays": sum(g["Plays"] for g in games),
             "hours": round(sum(g["Hours"] for g in games), 1),
             "manus": len(by_manu),
+            "emus": len({g["EMUID"] for g in games}),
             "catalog": len(catalog),
             "activeDays": len(daily),
             "tablesPerDay": round(sum(d["Tables"] for d in daily) / days, 2),
@@ -227,7 +243,9 @@ def build_payload(games, monthly, catalog, timing, daily, days):
                                for h in range(24)] for d in range(7)]},
         "coverage": coverage,
         "recency": recency,
-        "monthly": monthly,
+        "monthly": monthly_total,
+        "monthlyEmu": monthly_emu,
+        "emus": [{"name": n, **rounded(v)} for n, v in emu_rows],
         "scatter": [{"x": g["Year"], "y": g["AvgMin"], "r": g["Hours"], "label": g["Name"],
                      "manu": g["Manufact"], "rating": g["Rating"]}
                     for g in games if g["Year"]],
@@ -257,8 +275,10 @@ HTML = """<!DOCTYPE html>
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(520px,1fr)); gap:16px; }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; }
   .card.wide { grid-column:1/-1; }
-  .chart { position:relative; height:320px; }
-  .chart.tall { height:440px; }
+  .card { display:flex; flex-direction:column; }
+  .chart { position:relative; flex:1 1 auto; min-height:320px; }
+  .chart.tall { min-height:440px; }
+  .chart > canvas { position:absolute; left:0; top:0; }
   table { border-collapse:collapse; width:100%; font-size:13px; }
   th,td { padding:5px 8px; text-align:right; border-bottom:1px solid var(--border); }
   th:first-child,td:first-child { text-align:left; }
@@ -284,6 +304,7 @@ HTML = """<!DOCTYPE html>
   <div class="card"><h2>Hours by Decade</h2><div class="chart"><canvas id="cDec"></canvas></div></div>
   <div class="card"><h2>Hours by Table Type</h2><div class="chart"><canvas id="cType"></canvas></div></div>
   <div class="card"><h2>Tables by Rating</h2><div class="chart"><canvas id="cRate"></canvas></div></div>
+  <div class="card"><h2>Hours by Emulator</h2><div class="chart"><canvas id="cEmu"></canvas></div></div>
   <div class="card"><h2>Tables by Last Played</h2><div class="chart"><canvas id="cRecency"></canvas></div></div>
   <div class="card"><h2>Catalog Coverage: Played vs Owned</h2><div class="chart"><canvas id="cCov"></canvas></div></div>
 
@@ -302,6 +323,7 @@ HTML = """<!DOCTYPE html>
 const ALL = __DATA__;
 let D;
 const PAL = ['#4fd1c5','#e0457b','#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fbbf24','#38bdf8','#c084fc','#fb923c','#94a3b8'];
+const BARPAL = PAL.filter((_,i)=>i!==1); // keep the Sessions line colour unique
 Chart.defaults.color = '#d0d0d0'; Chart.defaults.borderColor = '#474747';
 const fmt = n => n.toLocaleString();
 const generated = new Date().toLocaleString();
@@ -325,21 +347,22 @@ document.getElementById('sub').textContent = `${key==='all' ? 'All time' : 'Last
 document.getElementById('trendTitle').textContent = `${D.trend} Play Trend`;
 const S = D.summary;
 document.getElementById('summary').innerHTML =
-  [['Tables played',S.tables],['of catalog',S.catalog],['Sessions',S.plays],['Hours',S.hours],['Manufacturers',S.manus],['Active days',S.activeDays],['Tables / day',S.tablesPerDay],['Sessions / day',S.playsPerDay],['Hours / day',S.hoursPerDay]]
+  [['Emulators',S.emus],['Tables played',S.tables],['of catalog',S.catalog],['Sessions',S.plays],['Hours',S.hours],['Manufacturers',S.manus],['Active days',S.activeDays],['Tables / day',S.tablesPerDay],['Sessions / day',S.playsPerDay],['Hours / day',S.hoursPerDay]]
   .map(([k,v])=>`<div><b>${fmt(v)}</b>${k}</div>`).join('');
 
 bar('cManu', D.manu.map(r=>r.name), D.manu.map(r=>r.hours), {horizontal:true});
 bar('cYear', D.years.map(r=>r.year), D.years.map(r=>r.hours), {colors:PAL[1]});
 bar('cDec', D.decades.map(r=>r.name), D.decades.map(r=>r.hours), {colors:PAL[2]});
 bar('cType', D.types.map(r=>r.name), D.types.map(r=>r.hours), {colors:PAL[3]});
+bar('cEmu', D.emus.map(r=>r.name), D.emus.map(r=>r.hours), {colors:PAL[6]});
 bar('cRate', D.ratings.map(r=>r.name), D.ratings.map(r=>r.tables), {colors:PAL[4], label:'Tables'});
 bar('cRecency', D.recency.map(r=>r.label), D.recency.map(r=>r.tables), {colors:PAL[5], label:'Tables'});
 
 track(document.getElementById('cMonth'), {
   data:{labels:D.monthly.map(r=>r.Month), datasets:[
-    {type:'bar', label:'Hours', data:D.monthly.map(r=>+(r.Secs/3600).toFixed(1)), backgroundColor:PAL[0], yAxisID:'y', order:1},
+    ...D.monthlyEmu.map((e,i)=>({type:'bar', label:e.name, data:e.hours, backgroundColor:BARPAL[i%BARPAL.length], yAxisID:'y', stack:'hours', order:1})),
     {type:'line', label:'Sessions', data:D.monthly.map(r=>r.Plays), borderColor:PAL[1], backgroundColor:PAL[1], yAxisID:'y1', tension:.25, order:0}]},
-  options:{maintainAspectRatio:false, scales:{y:{title:{display:true,text:'Hours'}},
+  options:{maintainAspectRatio:false, scales:{x:{stacked:true}, y:{stacked:true, title:{display:true,text:'Hours'}},
     y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'Sessions'}}}}});
 
 track(document.getElementById('cCov'), {

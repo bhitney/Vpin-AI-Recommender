@@ -11,3 +11,6 @@ PUPDatabase.db
 __pycache__/
 images/*.zip
 HistoryReport.html
+CombinedReport/VpinStatsReport.html
+CombinedReport/*.db
+mashup/
