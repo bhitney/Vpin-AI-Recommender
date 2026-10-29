@@ -36,7 +36,7 @@ LOG_AI_RECOMMENDATIONS = False
 
 # Number of tables to recommend
 NUM_RECOMMENDATIONS = 15
-NUM_RECOMMENDATIONS_EM = 10
+NUM_RECOMMENDATIONS_EM = 15
 
 # Minimum game rating filter for candidate pool (0 = no filter)
 MIN_GAME_RATING = 0
@@ -102,6 +102,43 @@ RATING_INFLUENCE = "moderate"
 #   "strong"   - A 1-2 strongly penalizes that specific table so it is only recommended if other
 #                signals are overwhelmingly strong (recommended if you want dislikes respected).
 NEGATIVE_RATING_INFLUENCE = "strong"
+
+# How strongly an upcoming holiday should influence recommendations. The script computes the
+# days until the next holiday in HOLIDAYS (below) and only mentions it to the AI when it falls
+# within HOLIDAY_WINDOW_DAYS. The AI matches the holiday's keywords against table names and its
+# own knowledge of the table's theme (theme/tags columns are NOT sent, to limit token usage).
+# One of:
+#   "none"     - Ignore holidays entirely (nothing is added to the prompt).
+#   "slight"   - Holiday-themed tables are a minor tie-breaker.
+#   "moderate" - Holiday-themed tables get a meaningful boost.
+#   "strong"   - Strongly prioritize holiday-themed tables; they should fill a large share of the list.
+HOLIDAY_INFLUENCE = "moderate"
+# A holiday is only considered when it is within this many days ahead (or HOLIDAY_GRACE_DAYS behind).
+# These are the defaults; any holiday below can override them with its own "days_before" / "days_after".
+HOLIDAY_WINDOW_DAYS = 7
+HOLIDAY_GRACE_DAYS = 5
+
+# Holidays to consider. Add, remove, or edit entries to suit your locale.
+#   name     - Shown to the AI.
+#   date     - One of:
+#                "MM-DD"          fixed yearly date, e.g. "10-31"
+#                "YYYY-MM-DD"     a single specific date
+#                "Nth-day-mon"    Nth weekday of a month, e.g. "4th-thu-nov"; use "last" for the last one
+#                "easter"         Easter Sunday (Western)
+#   keywords - Theme words the AI should look for in table names / known themes.
+#   days_before / days_after - Optional. Override HOLIDAY_WINDOW_DAYS / HOLIDAY_GRACE_DAYS for this holiday.
+HOLIDAYS = [
+    {"name": "New Year's Day",  "date": "01-01", "keywords": ["new year", "party", "celebration"]},
+    {"name": "Valentine's Day", "date": "02-14", "keywords": ["love", "romance", "valentine", "heart"]},
+    {"name": "St. Patrick's Day", "date": "03-17", "keywords": ["irish", "ireland", "leprechaun", "lucky", "shamrock"]},
+    {"name": "Easter",          "date": "easter", "keywords": ["easter", "bunny", "spring"]},
+    {"name": "Star Wars Day",   "date": "05-04", "days_before": 7, "days_after": 1, "keywords": ["star wars", "jedi", "sith", "empire", "space", "galaxy", "sci-fi"]},
+    {"name": "Independence Day", "date": "07-04", "keywords": ["patriotic", "america", "usa", "fireworks", "liberty"]},
+    {"name": "Talk Like a Pirate Day", "date": "09-19", "days_before": 7, "days_after": 1, "keywords": ["pirate", "pirates", "caribbean", "treasure", "buccaneer", "sea", "ship"]},
+    {"name": "Halloween",       "date": "10-31", "days_before": 14, "days_after": 2, "keywords": ["horror", "monster", "zombie", "vampire", "ghost", "haunted", "witch", "halloween", "creature", "addams", "ghostbusters"]},
+    {"name": "Thanksgiving",    "date": "4th-thu-nov", "keywords": ["thanksgiving", "harvest", "turkey", "football"]},
+    {"name": "Christmas",       "date": "12-25", "days_before": 28, "days_after": 7, "keywords": ["christmas", "xmas", "santa", "snow", "winter", "holiday", "elf", "reindeer"]},
+]
 
 # Include "not_owned" recommendations from the VPIN Spreadsheet?
 # This is currently deactivated as there were inaccurate results trying to match real vs virtual with games the user doesn't have - 

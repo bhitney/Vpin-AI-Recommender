@@ -3,7 +3,7 @@ import sys
 import sqlite3
 import json
 import time
-from datetime import datetime
+from datetime import datetime, date, timedelta
 # from groq import Groq
 #
 # Provider SDKs are imported lazily inside their helper functions so that you
@@ -253,6 +253,88 @@ def _generate_with_provider(prompt):
 
 
 # ==============================================================================
+# HOLIDAY HELPERS
+# ==============================================================================
+def _easter(year):
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = b // 4, b % 4
+    g = (8 * b + 13) // 25
+    h = (19 * a + b - d - g + 15) % 30
+    j, k = c // 4, c % 4
+    m = (a + 11 * h) // 319
+    r = (2 * e + 2 * j - k - h + m + 32) % 7
+    month = (h - m + r + 90) // 25
+    day = (h - m + r + month + 19) % 32
+    return date(year, month, day)
+
+def _resolve_holiday_date(spec, year):
+    """Resolve a HOLIDAYS date spec to a date in the given year, or None if invalid/not this year."""
+    spec = str(spec).strip().lower()
+    try:
+        if spec == "easter":
+            return _easter(year)
+        parts = spec.split("-")
+        if len(parts) == 2:
+            return date(year, int(parts[0]), int(parts[1]))
+        if len(parts) == 3 and len(parts[0]) == 4 and parts[0].isdigit():
+            d = date(int(parts[0]), int(parts[1]), int(parts[2]))
+            return d if d.year == year else None
+        if len(parts) == 3:
+            weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+            months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+            wd, month = weekdays.index(parts[1][:3]), months.index(parts[2][:3]) + 1
+            if parts[0] == "last":
+                d = date(year + (month == 12), month % 12 + 1, 1) - timedelta(days=1)
+                return d - timedelta(days=(d.weekday() - wd) % 7)
+            first = date(year, month, 1)
+            first += timedelta(days=(wd - first.weekday()) % 7)
+            return first + timedelta(weeks=int(parts[0].rstrip("stndrh")) - 1)
+    except (ValueError, IndexError):
+        pass
+    log(f"[!] Ignoring invalid holiday date spec: {spec!r}")
+    return None
+
+def build_holiday_criterion(today=None):
+    """Return the holiday scoring-criterion text, or '' when off or no holiday is in range."""
+    levels = {
+        "slight": "Treat holiday theme as a MINOR signal — a tie-breaker between otherwise-close candidates only.",
+        "moderate": "Give holiday-themed candidates a MEANINGFUL boost, balanced against the user's history signals.",
+        "strong": "STRONGLY prioritize holiday-themed candidates; a large share of the list should be holiday-themed when enough exist, while still favoring the user's tastes among them.",
+    }
+    level = str(HOLIDAY_INFLUENCE).strip().lower()
+    if level not in levels:
+        return ""
+    today = today or date.today()
+    best = None  # (days_until, holiday)
+    for h in HOLIDAYS:
+        for year in (today.year, today.year + 1):
+            d = _resolve_holiday_date(h.get("date", ""), year)
+            if d is None:
+                continue
+            delta = (d - today).days
+            before = h.get("days_before", HOLIDAY_WINDOW_DAYS)
+            after = h.get("days_after", HOLIDAY_GRACE_DAYS)
+            if -after <= delta <= before and (best is None or abs(delta) < abs(best[0])):
+                best = (delta, h)
+    if best is None:
+        return ""
+    delta, h = best
+    if delta > 1:
+        when = f"is in {delta} days"
+    elif delta == 1:
+        when = "is tomorrow"
+    elif delta == 0:
+        when = "is today"
+    else:
+        when = f"was {-delta} day(s) ago"
+    keywords = ", ".join(h.get("keywords", []))
+    return f"""    5d. Holiday Weight: Today is {today.isoformat()} and {h['name']} {when}. {levels[level]}
+       - Holiday-themed means the table's name or your knowledge of its theme matches: {keywords}.
+       - This only adjusts ranking among eligible candidates; never recommend a table outside the candidate_pool, and never boost a table rated 1-2 because of the holiday.
+       - If the pool has few holiday-themed tables, do not pad with weak matches.
+       - REASON TEXT: if the holiday theme materially influenced a pick (it is holiday-themed AND the holiday helped it rank), end its "reason" with a short note such as "; fits {h['name']}" (about 3-5 extra words). Omit the note for picks the holiday did not influence."""
+
+# ==============================================================================
 # AI GENERATION STEP
 # ==============================================================================
 def fetch_recommendations(cabinet_data):
@@ -337,8 +419,10 @@ def fetch_recommendations(cabinet_data):
        - Playtime only informs how much a history table counts; it is not a reason to penalize a candidate.""",
     }
     playtime_criterion = _playtime_blocks.get(PLAYTIME_INFLUENCE, _playtime_blocks["moderate"])
+    holiday_criterion = build_holiday_criterion()
+    holiday_reason_note = " EXCEPTION: when criterion 5d applies to a pick, append the short holiday note it describes after the history signals (this does not count toward the 2-3 history signals)." if holiday_criterion else ""
     prompt = f"""
-    You are an expert Virtual Pinball recommendation engine.
+    You are an expert
     Your objective is to analyze a user's play history and select the best matching games from an available "candidate_pool". 
     The data below uses a compact format:
     - "top_played_general" rows are: id,plays,seconds,avg_seconds,last_played,game,year,manufacturer,type,rating (non-EM history)
@@ -373,7 +457,8 @@ def fetch_recommendations(cabinet_data):
 {rating_criterion}
 {negative_rating_criterion}
 {playtime_criterion}
-   6. Respect Natural Clustering:
+{holiday_criterion}
+   6.
 
     ---
     [CONFIDENCE SCORE]
@@ -395,7 +480,7 @@ def fetch_recommendations(cabinet_data):
     ---
     [OUTPUT FORMAT]
     Return ONLY a raw JSON object. Do not include markdown formatting, markdown code blocks (such as ```json) or any conversational text. 
-    Each recommendation's "reason" must be a concise explanation (roughly 8-20 words) citing the 2-3 STRONGEST SPECIFIC signals from the user's history that drove the pick — e.g., a manufacturer, era, hardware platform, theme, or a high personal rating. Separate the factors with semicolons, ordered strongest first. CRITICAL: address the user in second person and make the CONNECTION explicit so a factor never reads as a bare fact about some other game — when you cite a table from the user's history, frame it as a relationship to the recommended table using phrasing like "similar to your...", "matches your...", "shares the ... you play in...", or "like your 5-star...". For example "similar to your 5-star Williams Nags; matches the space theme you play in Space Time" or "shares the 90s Williams DMD style you favor; recent VPW build". Cite only factors genuinely supported by the data and do NOT use generic justifications like "popular" or "highly rated by the community".
+    Cite only factors genuinely supported by the data and do NOT use generic justifications like "popular" or "highly rated by the community".{holiday_reason_note}
 
     JSON Schema:
     {{
@@ -423,6 +508,7 @@ def fetch_recommendations(cabinet_data):
     log(f"[+] Rating influence level: {RATING_INFLUENCE}")
     log(f"[+] Negative rating influence level: {NEGATIVE_RATING_INFLUENCE}")
     log(f"[+] Playtime influence level: {PLAYTIME_INFLUENCE}")
+    log(f"[+] Holiday influence level: {HOLIDAY_INFLUENCE}" + (" (holiday active)" if holiday_criterion else ""))
 
     with open(PROMPT_PATH, 'w', encoding='utf-8') as f:
         f.write(prompt)
